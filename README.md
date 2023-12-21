@@ -13,6 +13,11 @@ Then install the library:
 ```bash
 pip install -e .
 ```
+
+Dependencies:
+```bash
+pip install pandas
+```
 # Usage
 ## Dashboard
 TBI
