@@ -1,0 +1,10 @@
+.selected-row {
+    background-color: #A9A9A9 !important;
+}
+.dash-table-container .row {
+    display: block;
+    margin: 0;
+  }
+.dash-data-table tbody tr.selected {
+    background-color: yellow !important;
+}
