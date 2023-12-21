@@ -1,6 +1,6 @@
 import rot2prog
 import logging
-from passive_rf.db.gen_sat_db import generate_db
+from hamilton.db.gen_sat_db import generate_db
 
 
 logging.basicConfig(level = logging.DEBUG)

@@ -9,7 +9,7 @@ from dash.exceptions import PreventUpdate
 from dash_bootstrap_templates import load_figure_template
 
 import rot2prog
-from passive_rf.space_object_tracker import SpaceObjectTracker
+from hamilton.space_object_tracker import SpaceObjectTracker
 
 SELECTED_ROW_COLOR = "#e5ecf6"
 
