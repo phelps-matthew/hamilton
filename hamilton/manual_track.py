@@ -14,6 +14,8 @@ import signal
 import sys
 import rot2prog
 from hamilton.space_object_tracker import SpaceObjectTracker
+import traceback
+
 
 # Configure logging for debug information
 logging.basicConfig(level=logging.DEBUG)
@@ -38,6 +40,7 @@ class SatelliteTracker(threading.Thread):
                     self.stop()
             except Exception as e:
                 logger.error(f"Error in tracking: {e}")
+                logger.debug(traceback.format_exc())
             time.sleep(self.interval)
 
     def stop(self):
@@ -87,7 +90,9 @@ def signal_handler(sig, frame):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Satellite Tracker CLI")
-    parser.add_argument("--sat_id", required=False, help="Satellite ID to track")
+    parser.add_argument(
+        "--sat_id", required=False, help="Satnogs satellite ID to track"
+    )
     parser.add_argument(
         "--dry_run",
         action="store_true",
@@ -100,16 +105,13 @@ if __name__ == "__main__":
         logger.info("Connecting to MD-01")
         rot = rot2prog.ROT2Prog("/dev/usbttymd01")
         logger.info("Successfully connected to MD-01")
-        logger.info("Rotator status:")
-        print(rot.status())  # Query initial status of the rotator
+        logger.info(f"Rotator status: {rot.status()}")
     except Exception as e:
         logger.error(f"Error in ROT2Prog: {e}")
 
-
-    exit()
     # Initialize state estimator and update satcom satabase
     so_tracker = SpaceObjectTracker()
-    so_tracker.update_database_from_remote()
+    # so_tracker.update_database_from_remote()
 
     # Start the satellite tracking thread
     tracking_thread = SatelliteTracker(
