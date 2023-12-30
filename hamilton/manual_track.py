@@ -54,6 +54,7 @@ class SatelliteTracker(threading.Thread):
             logger.info(
                 f"Elevation {el_so} below threshold {self.min_elevation}. Stopping tracking."
             )
+            logger.info(f"AZ_SO: {az_so:<6.2f}, EL_SO: {el_so:<6.2f}")
             return True
 
         if self.dry_run:
@@ -86,7 +87,7 @@ def signal_handler(sig, frame):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Satellite Tracker CLI")
-    parser.add_argument("--sat_id", required=True, help="Satellite ID to track")
+    parser.add_argument("--sat_id", required=False, help="Satellite ID to track")
     parser.add_argument(
         "--dry_run",
         action="store_true",
@@ -97,10 +98,12 @@ if __name__ == "__main__":
     # Connect to MD-01
     try:
         rot = rot2prog.ROT2Prog("/dev/usbttymd01")
-        rot.status()  # Query initial status of the rotator
+        print(rot.status())  # Query initial status of the rotator
     except Exception as e:
         logger.error(f"Error in ROT2Prog: {e}")
 
+
+    exit()
     # Initialize state estimator and update satcom satabase
     so_tracker = SpaceObjectTracker()
     so_tracker.update_database_from_remote()
