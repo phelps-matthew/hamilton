@@ -97,7 +97,10 @@ if __name__ == "__main__":
 
     # Connect to MD-01
     try:
+        logger.info("Connecting to MD-01")
         rot = rot2prog.ROT2Prog("/dev/usbttymd01")
+        logger.info("Successfully connected to MD-01")
+        logger.info("Rotator status:")
         print(rot.status())  # Query initial status of the rotator
     except Exception as e:
         logger.error(f"Error in ROT2Prog: {e}")
