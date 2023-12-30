@@ -6,7 +6,7 @@ from numpy import ndarray
 from skyfield.api import EarthSatellite, load, wgs84
 import pytz
 
-from passive_rf.db.gen_sat_db import generate_db as generate_satcom_db
+from hamilton.db.gen_sat_db import generate_db as generate_satcom_db
 
 LATTITUDE = 20.7464000000
 LONGITUDE = -156.4314700000
@@ -38,7 +38,7 @@ class SpaceObjectTracker:
 
     def update_database_from_remote(self):
         """Update database (sats, tles, txs) from remote server"""
-        self._root_sat_db = generate_satcom_db()
+        self._root_sat_db = generate_satcom_db(use_cache=False)
         self._db_update_time = datetime.now(tz=timezone.utc)
 
     def update_all_observational_params(self) -> dict:

@@ -8,7 +8,7 @@ import pandas as pd
 import plotly.graph_objs as go
 from dash import Dash, Input, Output, State, callback_context, dash_table, dcc, html, no_update
 from dash.exceptions import PreventUpdate
-from dash_bootstrap_templates import load_figure_template
+#from dash_bootstrap_templates import load_figure_template
 
 #import rot2prog
 from hamilton.space_object_tracker import SpaceObjectTracker

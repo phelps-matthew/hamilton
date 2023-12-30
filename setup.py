@@ -7,4 +7,10 @@ setuptools.setup(
     author="Matthew Phelps",
     author_email="matthewphelps@odysseyconsult.com",
     packages=setuptools.find_packages(),
+    install_requires=[
+        "pandas",
+        "dash",
+        "dash-bootstrap-components",
+        "skyfield"
+    ]
 )
