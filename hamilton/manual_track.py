@@ -21,12 +21,13 @@ logger = logging.getLogger(__name__)
 
 
 class SatelliteTracker(threading.Thread):
-    def __init__(self, rot, sat_id, interval=3, min_elevation=10):
+    def __init__(self, rot, sat_id, interval=3, min_elevation=10, dry_run=False):
         super().__init__()
         self.rot = rot
         self.sat_id = sat_id
         self.interval = interval  # Interval between tracking commands (sec)
         self.min_elevation = min_elevation  # Minimum elevation threshold (deg)
+        self.dry_run = dry_run
         self._stop_event = threading.Event()
 
     def run(self):
@@ -55,10 +56,14 @@ class SatelliteTracker(threading.Thread):
             )
             return True
 
-        self.rot.set(az_so, el_so)
-        time.sleep(1.0)  # Short delay for rotor movement
-        az_rot, el_rot = self.rot.status()
+        if self.dry_run:
+            logger.info(f"Dry Run: Command issued - rot.set({az_so}, {el_so})")
+        else:
+            self.rot.set(az_so, el_so)
 
+        time.sleep(1.0)  # Short delay for rotor movement
+
+        az_rot, el_rot = self.rot.status()
         az_err = az_so - az_rot
         el_err = el_so - el_rot
 
@@ -82,6 +87,11 @@ def signal_handler(sig, frame):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Satellite Tracker CLI")
     parser.add_argument("--sat_id", required=True, help="Satellite ID to track")
+    parser.add_argument(
+        "--dry_run",
+        action="store_true",
+        help="Emulate tracking sequence without mechanically moving rotors",
+    )
     args = parser.parse_args()
 
     # Connect to MD-01
@@ -96,7 +106,9 @@ if __name__ == "__main__":
     so_tracker.update_database_from_remote()
 
     # Start the satellite tracking thread
-    tracking_thread = SatelliteTracker(rot=rot, sat_id=args.sat_id)
+    tracking_thread = SatelliteTracker(
+        rot=rot, sat_id=args.sat_id, dry_run=args.dry_run
+    )
     signal.signal(signal.SIGINT, signal_handler)  # Handle Ctrl+C signal
 
     tracking_thread.start()
