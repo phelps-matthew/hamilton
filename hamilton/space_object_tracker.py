@@ -78,7 +78,7 @@ class SpaceObjectTracker:
         """
         # search for norad id within root database if required
         if sat_id is None and norad_id is not None:
-            for k, v in self._root_sat_db:
+            for k, v in self._root_sat_db.items():
                 if norad_id == v["norad_cat_id"]:
                     sat_id = k
 

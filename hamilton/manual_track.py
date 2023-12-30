@@ -21,6 +21,8 @@ import traceback
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+shutdown_event = threading.Event()  # Event to signal shutdown
+
 
 class SatelliteTracker(threading.Thread):
     def __init__(self, rot, sat_id, interval=3, min_elevation=10, dry_run=False):
@@ -33,7 +35,7 @@ class SatelliteTracker(threading.Thread):
         self._stop_event = threading.Event()
 
     def run(self):
-        while not self._stop_event.is_set():
+        while not shutdown_event.is_set():
             try:
                 below_threshold = self.track_satellite()
                 if below_threshold:
@@ -57,7 +59,7 @@ class SatelliteTracker(threading.Thread):
         # Check if elevation is below minimum threshold
         if el_so < self.min_elevation:
             logger.info(
-                f"Elevation {el_so} below threshold {self.min_elevation}. Stopping tracking."
+                f"Elevation {el_so} below threshold {self.min_elevation}. Tracking disabled."
             )
         else:
             if self.dry_run:
@@ -82,10 +84,10 @@ class SatelliteTracker(threading.Thread):
 
 
 def signal_handler(sig, frame):
-    logger.info("Stopping Satellite Tracking...")
+    logger.info("Aborting Satellite Tracking...")
+    shutdown_event.set()  # Signal all threads to shut down
     tracking_thread.stop()
     tracking_thread.join()
-    sys.exit(0)
 
 
 if __name__ == "__main__":
@@ -115,6 +117,12 @@ if __name__ == "__main__":
     tracking_thread = SatelliteTracker(
         rot=rot, sat_id=int(args.sat_id), dry_run=args.dry_run
     )
-    signal.signal(signal.SIGINT, signal_handler)  # Handle Ctrl+C signal
 
+    signal.signal(signal.SIGINT, signal_handler)  # Handle Ctrl+C signal
     tracking_thread.start()
+
+    while not shutdown_event.is_set():
+        time.sleep(1)  # Main thread continues to run until signaled to stop
+
+    # Any final cleanup can go here
+    logger.info("Program terminated")
