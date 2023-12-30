@@ -36,6 +36,7 @@ def download_json_data(url: str) -> dict:
     response = requests.get(url)
     return json.loads(response.text)
 
+
 def load_json(path):
     with open(path) as f:
         d = json.load(f)
@@ -326,6 +327,14 @@ def generate_db(use_cache=False):
     logging.info("SATCOM database generation complete.")
 
     return data
+
+
+def get_cached_db():
+    logging.info("Fetching cached SATCOM database.")
+    path = "./satcom.json"
+    with open(path) as f:
+        d = json.load(f)
+    return d
 
 
 if __name__ == "__main__":

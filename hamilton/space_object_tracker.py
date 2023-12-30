@@ -6,18 +6,21 @@ from numpy import ndarray
 from skyfield.api import EarthSatellite, load, wgs84
 import pytz
 
+from hamilton.db.gen_sat_db import get_cached_db as get_satcom_db
 from hamilton.db.gen_sat_db import generate_db as generate_satcom_db
 
 LATTITUDE = 20.7464000000
 LONGITUDE = -156.4314700000
-ALTITUDE = 103.8000000000 # (meters)
+ALTITUDE = 103.8000000000  # (meters)
 
 
 class SpaceObjectTracker:
-    def __init__(self, sat_db="./db/satcom.json", sensor_LLA=(LATTITUDE, LONGITUDE, ALTITUDE)):
-        self._root_sat_db = generate_satcom_db(use_cache=True)
+    def __init__(
+        self, sat_db="./db/satcom.json", sensor_LLA=(LATTITUDE, LONGITUDE, ALTITUDE)
+    ):
+        self._root_sat_db = get_satcom_db()
         self._max_space_objects = float("inf")
-        #self._max_space_objects = 100
+        # self._max_space_objects = 100
         self._timescale = load.timescale()
         self._params_update_time = None  # all observational params
         self._db_update_time = None
@@ -32,9 +35,9 @@ class SpaceObjectTracker:
 
         self.aos_los = dict()
         self.orbits = dict()
-        self.update_all_aos_los()
+        # self.update_all_aos_los()
         self.obs_params = dict()
-        self.update_all_observational_params()
+        # self.update_all_observational_params()
 
     def update_database_from_remote(self):
         """Update database (sats, tles, txs) from remote server"""
@@ -51,7 +54,9 @@ class SpaceObjectTracker:
             if i < self._max_space_objects:
                 # if sat not in self.obs_params:
                 # print(f"Adding new space object to track:{self._root_sat_db[sat]['name']}")
-                self.obs_params[sat] = self.calculate_observational_params(sat_id=sat, time=time)
+                self.obs_params[sat] = self.calculate_observational_params(
+                    sat_id=sat, time=time
+                )
 
                 # if aos/los is over 30 minutes old, reupdate
                 if self._aos_los_update_time < (time - timedelta(minutes=30)):
@@ -59,7 +64,9 @@ class SpaceObjectTracker:
 
                 self.obs_params[sat].update(self.aos_los[sat])
 
-    def calculate_observational_params(self, sat_id=None, time=None, norad_id=None) -> dict:
+    def calculate_observational_params(
+        self, sat_id=None, time=None, norad_id=None
+    ) -> dict:
         """Calculate observational params for single space object at a given time
 
         Args:
@@ -83,7 +90,11 @@ class SpaceObjectTracker:
         tle_line_1 = self._root_sat_db[sat_id]["tle1"]
         tle_line_2 = self._root_sat_db[sat_id]["tle2"]
         satellite = EarthSatellite(line1=tle_line_1, line2=tle_line_2)
-        params = (satellite - self._sensor).at(time_scale).frame_latlon_and_rates(self._sensor)
+        params = (
+            (satellite - self._sensor)
+            .at(time_scale)
+            .frame_latlon_and_rates(self._sensor)
+        )
 
         el = params[0].degrees
         az = params[1].degrees

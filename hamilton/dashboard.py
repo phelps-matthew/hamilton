@@ -50,6 +50,8 @@ class TrackThread(threading.Thread):
 
 
 so_tracker = SpaceObjectTracker()
+so_tracker.update_all_aos_los()
+so_tracker.update_all_observational_params()
 data = so_tracker.get_all_obs_params()
 root_sat_db = so_tracker._root_sat_db
 orbits = so_tracker.orbits
