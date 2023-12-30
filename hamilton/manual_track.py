@@ -38,6 +38,8 @@ class SatelliteTracker(threading.Thread):
                 below_threshold = self.track_satellite()
                 if below_threshold:
                     self.stop()
+            except SystemExit:
+                break  # Exit the loop if a SystemExit exception is caught
             except Exception as e:
                 logger.error(f"Error in tracking: {e}")
                 logger.debug(traceback.format_exc())
@@ -49,7 +51,7 @@ class SatelliteTracker(threading.Thread):
 
     def track_satellite(self):
         # Calculate and set observational parameters
-        obs_params = so_tracker.calculate_observational_params(self.sat_id)
+        obs_params = so_tracker.calculate_observational_params(norad_id=self.sat_id)
         az_so, el_so = obs_params["az"], obs_params["el"]
 
         # Check if elevation is below minimum threshold
@@ -57,13 +59,11 @@ class SatelliteTracker(threading.Thread):
             logger.info(
                 f"Elevation {el_so} below threshold {self.min_elevation}. Stopping tracking."
             )
-            logger.info(f"AZ_SO: {az_so:<6.2f}, EL_SO: {el_so:<6.2f}")
-            return True
-
-        if self.dry_run:
-            logger.info(f"Dry Run: Command issued - rot.set({az_so}, {el_so})")
         else:
-            self.rot.set(az_so, el_so)
+            if self.dry_run:
+                logger.info(f"Dry Run: Command issued - rot.set({az_so}, {el_so})")
+            else:
+                self.rot.set(az_so, el_so)
 
         time.sleep(1.0)  # Short delay for rotor movement
 
@@ -73,7 +73,7 @@ class SatelliteTracker(threading.Thread):
 
         # Logging the tracking information
         logger.info(
-            f"AZ_SO: {az_so:<6.2f}, EL_SO: {el_so:<6.2f}, "
+            f"ID: {self.sat_id}, AZ_SO: {az_so:<6.2f}, EL_SO: {el_so:<6.2f}, "
             f"AZ_ROT: {az_rot:<6.2f}, EL_ROT: {el_rot:<6.2f}, "
             f"AZ_ERR: {az_err:<6.2f}, EL_ERR: {el_err:<6.2f}"
         )
@@ -90,9 +90,7 @@ def signal_handler(sig, frame):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Satellite Tracker CLI")
-    parser.add_argument(
-        "--sat_id", required=False, help="Satnogs satellite ID to track"
-    )
+    parser.add_argument("--sat_id", required=False, help="Norad ID to track")
     parser.add_argument(
         "--dry_run",
         action="store_true",
@@ -115,7 +113,7 @@ if __name__ == "__main__":
 
     # Start the satellite tracking thread
     tracking_thread = SatelliteTracker(
-        rot=rot, sat_id=args.sat_id, dry_run=args.dry_run
+        rot=rot, sat_id=int(args.sat_id), dry_run=args.dry_run
     )
     signal.signal(signal.SIGINT, signal_handler)  # Handle Ctrl+C signal
 
