@@ -15,6 +15,7 @@ import sys
 import rot2prog
 from hamilton.space_object_tracker import SpaceObjectTracker
 import traceback
+import numpy as np
 
 
 # Configure logging for debug information
@@ -24,15 +25,66 @@ logger = logging.getLogger(__name__)
 shutdown_event = threading.Event()  # Event to signal shutdown
 
 
-class SatelliteTracker(threading.Thread):
-    def __init__(self, rot, sat_id, interval=3, min_elevation=10, dry_run=False):
+class TrackingThread(threading.Thread):
+    def __init__(self, rot, so_tracker, sat_id, interval=3, min_elevation=10, dry_run=False):
         super().__init__()
         self.rot = rot
+        self.so_tracker = so_tracker
         self.sat_id = sat_id
         self.interval = interval  # Interval between tracking commands (sec)
         self.min_elevation = min_elevation  # Minimum elevation threshold (deg)
         self.dry_run = dry_run
         self._stop_event = threading.Event()
+        self.wrap = self.add_wrap()
+
+    @classmethod
+    def angular_distance(angle1, angle2, clockwise):
+        """
+        Compute the absolute angular distance between two angles given an orientation.
+
+        Parameters:
+        angle1 (float): The first angle in degrees.
+        angle2 (float): The second angle in degrees.
+        clockwise (bool): True for clockwise, False for counterclockwise.
+
+        Returns:
+        float: The absolute angular distance in degrees.
+        """
+        if clockwise:
+            if angle2 < angle1:
+                return 360 - angle1 + angle2
+            else:
+                return angle2 - angle1
+        else:
+            if angle2 > angle1:
+                return 360 - angle2 + angle1
+            else:
+                return angle1 - angle2
+
+    def add_wrap(self):
+        """Based on orbital path, determine if rotors positions should wrap past 360 deg or not"""
+        # ensure orbit is valid, i.e., observational parameters are non null
+        aos_obs_params, los_obs_params = self.so_tracker.get_aos_los_coordinates(sat_id=self.sat_id)
+        assert bool(aos_obs_params) and bool(los_obs_params), "No AOS/LOS observational parameters available"
+
+        # acquire AOS/LOS angular parameters
+        # note: azimuth from obs_params always in [0, 360]
+        az_aos = aos_obs_params["az"]
+        az_rate_aos = aos_obs_params["az_rate"]
+        az_los = los_obs_params["az"]
+        clockwise = az_rate_aos > 0
+
+        # compare angular distance relative to home position (270 deg) with and without 2pi wrap
+        total_angular_dist = max(
+            self.angular_distance(270, az_aos, clockwise), self.angular_distance(270, az_los, clockwise)
+        )
+        total_angular_dist_wrapped = max(
+            self.angular_distance(270, az_aos + 360, clockwise), self.angular_distance(270, az_los + 360, clockwise)
+        )
+        # if true, add 2*pi to az coordinate
+        add_wrap = total_angular_dist > total_angular_dist_wrapped
+
+        return add_wrap
 
     def run(self):
         while not shutdown_event.is_set():
@@ -53,14 +105,15 @@ class SatelliteTracker(threading.Thread):
 
     def track_satellite(self):
         # Calculate and set observational parameters
-        obs_params = so_tracker.calculate_observational_params(norad_id=self.sat_id)
+        obs_params = self.so_tracker.calculate_observational_params(sat_id=self.sat_id)
         az_so, el_so = obs_params["az"], obs_params["el"]
+
+        if self.wrap:
+            az_so += 360
 
         # Check if elevation is below minimum threshold
         if el_so < self.min_elevation:
-            logger.info(
-                f"Elevation {el_so} below threshold {self.min_elevation}. Tracking disabled."
-            )
+            logger.info(f"Elevation {el_so} below threshold {self.min_elevation}. Tracking disabled.")
         else:
             if self.dry_run:
                 logger.info(f"Dry Run: Command issued - rot.set({az_so}, {el_so})")
@@ -92,7 +145,7 @@ def signal_handler(sig, frame):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Satellite Tracker CLI")
-    parser.add_argument("--sat_id", required=False, help="Norad ID to track")
+    parser.add_argument("--sat_id", required=False, help="Satnogs UUID to track")
     parser.add_argument(
         "--dry_run",
         action="store_true",
@@ -114,9 +167,7 @@ if __name__ == "__main__":
     # so_tracker.update_database_from_remote()
 
     # Start the satellite tracking thread
-    tracking_thread = SatelliteTracker(
-        rot=rot, sat_id=int(args.sat_id), dry_run=args.dry_run
-    )
+    tracking_thread = TrackingThread(rot=rot, so_tracker=so_tracker, sat_id=args.sat_id, dry_run=args.dry_run)
 
     signal.signal(signal.SIGINT, signal_handler)  # Handle Ctrl+C signal
     tracking_thread.start()
