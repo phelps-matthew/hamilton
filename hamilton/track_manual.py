@@ -52,12 +52,12 @@ class TrackingThread(threading.Thread):
         """
         if clockwise:
             if angle2 < angle1:
-                return 360 - angle1 + angle2
+                return (angle2 - angle1) + 360
             else:
                 return angle2 - angle1
         else:
             if angle2 > angle1:
-                return 360 - angle2 + angle1
+                return (angle1 - angle2) + 360
             else:
                 return angle1 - angle2
 
