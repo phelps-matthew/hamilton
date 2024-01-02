@@ -183,9 +183,12 @@ class SpaceObjectTracker:
         if aos is None or los is None:
             return {}, {}
 
+        aos_time = self._timescale.from_datetime(aos)
+        los_time = self._timescale.from_datetime(los)
+
         # compute parameters based on these times
-        aos_obs_params = self.calculate_observational_params(sat_id, time=aos)
-        los_obs_params = self.calculate_observational_params(sat_id, time=los)
+        aos_obs_params = self.calculate_observational_params(sat_id, time=aos_time)
+        los_obs_params = self.calculate_observational_params(sat_id, time=los_time)
 
         return aos_obs_params, los_obs_params
 

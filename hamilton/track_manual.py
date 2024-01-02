@@ -84,6 +84,9 @@ class TrackingThread(threading.Thread):
         # if true, add 2*pi to az coordinate
         add_wrap = total_angular_dist > total_angular_dist_wrapped
 
+        if add_wrap:
+            logger.info("Adding 2 pi wrap to azimuth coordinates")
+
         return add_wrap
 
     def run(self):
