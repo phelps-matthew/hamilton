@@ -37,7 +37,7 @@ class TrackingThread(threading.Thread):
         self._stop_event = threading.Event()
         self.wrap = self.add_wrap()
 
-    @classmethod
+    @staticmethod
     def angular_distance(angle1, angle2, clockwise):
         """
         Compute the absolute angular distance between two angles given an orientation.

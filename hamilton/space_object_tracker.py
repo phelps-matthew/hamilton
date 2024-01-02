@@ -176,19 +176,16 @@ class SpaceObjectTracker:
     def get_aos_los_coordinates(self, sat_id, **kwargs):
         """Calculate observational params associated with AOS time and LOS time"""
         # gather aos, los times
-        event_map = self.get_aos_los(self, sat_id, **kwargs)
+        event_map = self.get_aos_los(sat_id, **kwargs)
         aos = event_map[0][0] if event_map[0] else None
         los = event_map[2][0] if event_map[2] else None
 
         if aos is None or los is None:
             return {}, {}
 
-        aos_time = self._timescale.from_datetime(aos)
-        los_time = self._timescale.from_datetime(los)
-
         # compute parameters based on these times
-        aos_obs_params = self.calculate_observational_params(sat_id, time=aos_time)
-        los_obs_params = self.calculate_observational_params(sat_id, time=los_time)
+        aos_obs_params = self.calculate_observational_params(sat_id, time=aos)
+        los_obs_params = self.calculate_observational_params(sat_id, time=los)
 
         return aos_obs_params, los_obs_params
 
