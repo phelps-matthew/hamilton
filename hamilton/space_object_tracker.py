@@ -144,7 +144,7 @@ class SpaceObjectTracker:
         return obs_params
 
     def get_aos_los(self, sat_id, time=None, delta_t=12):
-        """Cacluate acquisition of signal (AOS) and loss of signal (LOS)
+        """Cacluate acquisition of signal (AOS) and loss of signal (LOS) times
 
         Args:
             sat_id: satnogs satellite identifier
@@ -172,6 +172,23 @@ class SpaceObjectTracker:
         for t, event in zip(times, events):
             event_map[event].append(t)
         return event_map
+
+    def get_aos_los_coordinates(self, sat_id, **kwargs):
+        """Calculate observational params associated with AOS time and LOS time"""
+        # gather aos, los times
+        event_map = self.get_aos_los(self, sat_id, **kwargs)
+        aos = event_map[0][0] if event_map[0] else None
+        los = event_map[2][0] if event_map[2] else None
+
+        if aos is None or los is None:
+            return {}, {}
+
+        # compute parameters based on these times
+        aos_obs_params = self.calculate_observational_params(sat_id, time=aos)
+        los_obs_params = self.calculate_observational_params(sat_id, time=los)
+
+        return aos_obs_params, los_obs_params
+
 
     def update_all_aos_los(self):
         """Update all space object AOS, TCA, and LOS parameters"""
