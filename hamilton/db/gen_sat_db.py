@@ -16,9 +16,9 @@ import shutil
 from collections import Counter
 
 # Hamilton frequency bands
-VHF_LOW = 143e6
-VHF_HIGH = 147e6
-UHF_LOW = 430e6
+VHF_LOW = 130e6
+VHF_HIGH = 150e6
+UHF_LOW = 410e6
 UHF_HIGH = 440e6
 
 
@@ -294,7 +294,7 @@ def format(data):
     for d in data:
         key = d["sat_id"]
         inner_dict = d.copy()
-        inner_dict.pop("sat_id")
+        #inner_dict.pop("sat_id")
         satcom_db[key] = inner_dict
     return satcom_db
 
@@ -321,7 +321,8 @@ def generate_db(use_cache=False):
     data = format(data)
 
     # Export as json
-    write_json_to_file(data, "./satcom.json")
+    path = Path(__file__).parent / "satcom.json"
+    write_json_to_file(data, path)
 
     logging.info(f"Total number of observable satellites: {len(data)}")
     logging.info("SATCOM database generation complete.")
@@ -331,7 +332,7 @@ def generate_db(use_cache=False):
 
 def get_cached_db():
     logging.info("Fetching cached SATCOM database.")
-    path = "./satcom.json"
+    path = Path(__file__).parent / "satcom.json"
     with open(path) as f:
         d = json.load(f)
     return d
