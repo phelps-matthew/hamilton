@@ -26,7 +26,7 @@ shutdown_event = threading.Event()  # Event to signal shutdown
 
 
 class TrackingThread(threading.Thread):
-    def __init__(self, rot, so_tracker, sat_id, interval=3, min_elevation=10, dry_run=False):
+    def __init__(self, rot, so_tracker, sat_id, interval=1, min_elevation=10, dry_run=False):
         super().__init__()
         self.rot = rot
         self.so_tracker = so_tracker
@@ -35,34 +35,20 @@ class TrackingThread(threading.Thread):
         self.min_elevation = min_elevation  # Minimum elevation threshold (deg)
         self.dry_run = dry_run
         self._stop_event = threading.Event()
-        self.wrap = self.add_wrap()
+        self.wrap = self.compute_wrap()
 
     @staticmethod
-    def angular_distance(angle1, angle2, clockwise):
-        """
-        Compute the absolute angular distance between two angles given an orientation.
-
-        Parameters:
-        angle1 (float): The first angle in degrees.
-        angle2 (float): The second angle in degrees.
-        clockwise (bool): True for clockwise, False for counterclockwise.
-
-        Returns:
-        float: The absolute angular distance in degrees.
-        """
-        if clockwise:
-            if angle2 < angle1:
-                return (angle2 - angle1) + 360
-            else:
-                return angle2 - angle1
+    def wrap_angle(phi):
+        # if in left half plane, then wrapping is not feasible
+        if (phi > 180) and (phi < 360):
+            return phi
         else:
-            if angle2 > angle1:
-                return (angle1 - angle2) + 360
-            else:
-                return angle1 - angle2
+            phi += 360
+            return phi
 
-    def add_wrap(self):
+    def compute_wrap(self):
         """Based on orbital path, determine if rotors positions should wrap past 360 deg or not"""
+        home_az = 270
         # ensure orbit is valid, i.e., observational parameters are non null
         aos_obs_params, los_obs_params = self.so_tracker.get_aos_los_coordinates(sat_id=self.sat_id)
         assert bool(aos_obs_params) and bool(los_obs_params), "No AOS/LOS observational parameters available"
@@ -74,20 +60,39 @@ class TrackingThread(threading.Thread):
         az_los = los_obs_params["az"]
         clockwise = az_rate_aos > 0
 
-        # compare angular distance relative to home position (270 deg) with and without 2pi wrap
-        total_angular_dist = max(
-            self.angular_distance(270, az_aos, clockwise), self.angular_distance(270, az_los, clockwise)
-        )
-        total_angular_dist_wrapped = max(
-            self.angular_distance(270, az_aos + 360, clockwise), self.angular_distance(270, az_los + 360, clockwise)
-        )
-        # if true, add 2*pi to az coordinate
-        add_wrap = total_angular_dist > total_angular_dist_wrapped
+        # determine proper angular distance with and without wrapping
+        az_aos_dist = abs(home_az - az_aos)
+        az_los_dist = abs(home_az - az_los)
+        az_aos_wrap_dist = abs(home_az - (az_aos + 360))
+        az_los_wrap_dist = abs(home_az - (az_los + 360))
 
-        if add_wrap:
-            logger.info("Adding 2 pi wrap to azimuth coordinates")
+        # compute maximum angular distance with and without wrapping
+        az_max = max(az_aos_dist, az_los_dist)
+        az_wrap_max = max(az_aos_wrap_dist, az_los_wrap_dist)
 
-        return add_wrap
+        # minimize angular distance by selecting wrapping
+        wrap = az_wrap_max < az_max
+
+        # ensure wrap is valid
+        valid_aos_wrap = (self.wrap_angle(az_aos) >= 0) and (self.wrap_angle(az_aos) <= 540)
+        valid_los_wrap = (self.wrap_angle(az_los) >= 0) and (self.wrap_angle(az_los) <= 540)
+
+        # catch these tricky orbits that depend on path itermediate points
+        valid_wrap_path = (
+            self.wrap_angle(az_aos) > self.wrap_angle(az_los)
+            if clockwise
+            else self.wrap_angle(az_aos) < self.wrap_angle(az_los)
+        )
+
+        if wrap:
+            if not (valid_aos_wrap and valid_los_wrap):
+                logger.info("Cannot wrap, will exceed bounds")
+            elif not valid_wrap_path:
+                logger.info("Cannot wrap, not a valid path")
+            else:
+                logger.info("Enforcing 2 pi wrap!")
+                return True
+        return False
 
     def run(self):
         while not shutdown_event.is_set():
@@ -112,7 +117,9 @@ class TrackingThread(threading.Thread):
         az_so, el_so = obs_params["az"], obs_params["el"]
 
         if self.wrap:
-            az_so += 360
+            az_so = self.wrap_angle(az_so)
+
+        assert az_so >= 0 and az_so <= 540, f"AZ_SO with value {az_so} not in range [0, 540]"
 
         # Check if elevation is below minimum threshold
         if el_so < self.min_elevation:
@@ -123,7 +130,7 @@ class TrackingThread(threading.Thread):
             else:
                 self.rot.set(az_so, el_so)
 
-        time.sleep(1.0)  # Short delay for rotor movement
+        # time.sleep(min(1.0, self.interval))  # Short delay for rotor movement
 
         az_rot, el_rot = self.rot.status()
         az_err = az_so - az_rot
