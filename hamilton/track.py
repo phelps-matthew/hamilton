@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 shutdown_event = threading.Event()  # Event to signal shutdown
 
+class InvalidOrbit(Exception):
+    pass
 
 class TrackingThread(threading.Thread):
     def __init__(self, rot, so_tracker, sat_id, interval=1, min_elevation=10, dry_run=False):
@@ -35,20 +37,26 @@ class TrackingThread(threading.Thread):
         self.min_elevation = min_elevation  # Minimum elevation threshold (deg)
         self.dry_run = dry_run
         self._stop_event = threading.Event()
-        self.wrap = self.compute_wrap()
+        self.cw = self.cw_init()
 
     @staticmethod
-    def wrap_angle(phi):
-        # if in left half plane, then wrapping is not feasible
-        if (phi > 180) and (phi < 360):
+    def clockwise_angle(phi):
+        if (phi > 270) and (phi < 360):
             return phi
         else:
             phi += 360
             return phi
 
-    def compute_wrap(self):
-        """Based on orbital path, determine if rotors positions should wrap past 360 deg or not"""
-        home_az = 270
+    @staticmethod
+    def counterclockwise_angle(phi):
+        if (phi < 270) and (phi > 0):
+            return phi
+        else:
+            phi -= 360
+            return phi
+
+    def cw_init(self):
+        """Based on orbital path, determine if initial rotors direction should proceed clockwise or counterclockwise"""
         # ensure orbit is valid, i.e., observational parameters are non null
         aos_obs_params, los_obs_params = self.so_tracker.get_aos_los_coordinates(sat_id=self.sat_id)
         assert bool(aos_obs_params) and bool(los_obs_params), "No AOS/LOS observational parameters available"
@@ -58,41 +66,47 @@ class TrackingThread(threading.Thread):
         az_aos = aos_obs_params["az"]
         az_rate_aos = aos_obs_params["az_rate"]
         az_los = los_obs_params["az"]
-        clockwise = az_rate_aos > 0
+        clockwise_orbit = az_rate_aos > 0
 
-        # determine proper angular distance with and without wrapping
-        az_aos_dist = abs(home_az - az_aos)
-        az_los_dist = abs(home_az - az_los)
-        az_aos_wrap_dist = abs(home_az - (az_aos + 360))
-        az_los_wrap_dist = abs(home_az - (az_los + 360))
+        # compute maximum angular distance for clockwise rotor initialization
+        az_aos_cw = abs(270 - self.clockwise_angle(az_aos))
+        az_los_cw = abs(270 - self.clockwise_angle(az_los))
+        az_cw_max = max(az_aos_cw, az_los_cw)
 
-        # compute maximum angular distance with and without wrapping
-        az_max = max(az_aos_dist, az_los_dist)
-        az_wrap_max = max(az_aos_wrap_dist, az_los_wrap_dist)
+        # compute maximum angular distance for counterclockwise rotor initialization
+        az_aos_ccw = abs(270 - self.counterclockwise_angle(az_aos))
+        az_los_ccw = abs(270 - self.counterclockwise_angle(az_los))
+        az_ccw_max = max(az_aos_ccw, az_los_ccw)
 
-        # minimize angular distance by selecting wrapping
-        wrap = az_wrap_max < az_max
+        # select initial direction based on minimum arc length
+        cw_init = az_cw_max < az_ccw_max
 
-        # ensure wrap is valid
-        valid_aos_wrap = (self.wrap_angle(az_aos) >= 0) and (self.wrap_angle(az_aos) <= 540)
-        valid_los_wrap = (self.wrap_angle(az_los) >= 0) and (self.wrap_angle(az_los) <= 540)
+        # determine if clockwise init is valid
+        valid_aos_cw = (self.clockwise_angle(az_aos) >= 0) and (self.clockwise_angle(az_aos) <= 540)
+        valid_los_cw = (self.clockwise_angle(az_los) >= 0) and (self.clockwise_angle(az_los) <= 540)
 
-        # catch these tricky orbits that depend on path itermediate points
-        valid_wrap_path = (
-            self.wrap_angle(az_aos) > self.wrap_angle(az_los)
-            if clockwise
-            else self.wrap_angle(az_aos) < self.wrap_angle(az_los)
-        )
+        # determine if counterclockwise init is valid
+        valid_aos_ccw = (self.counterclockwise_angle(az_aos) >= 0) and (self.counterclockwise_angle(az_aos) <= 540)
+        valid_los_ccw = (self.counterclockwise_angle(az_los) >= 0) and (self.counterclockwise_angle(az_los) <= 540)
 
-        if wrap:
-            if not (valid_aos_wrap and valid_los_wrap):
-                logger.info("Cannot wrap, will exceed bounds")
-            elif not valid_wrap_path:
-                logger.info("Cannot wrap, not a valid path")
-            else:
-                logger.info("Enforcing 2 pi wrap!")
+        # ensure the orbit is valid in either rotor intialization
+        if not (valid_aos_cw and valid_los_cw and valid_aos_ccw and valid_los_ccw);
+            raise InvalidOrbit("Neither cw or ccw rotor initialization yields a valid orbit!")
+
+        if cw_init:
+            if (valid_aos_cw and valid_los_cw):
+                logger.info("Initial rotation direction: cw")
                 return True
-        return False
+            else:
+                logger.info("Invalid cw orbit. Initial rotation direction: ccw")
+                return False
+        else:
+            if (valid_aos_ccw and valid_los_ccw):
+                logger.info("Initial rotation direction: ccw")
+                return False
+            else:
+                logger.info("Invalid ccw orbit. Initial rotation direction: cw")
+                return True
 
     def run(self):
         while not shutdown_event.is_set():
@@ -116,8 +130,10 @@ class TrackingThread(threading.Thread):
         obs_params = self.so_tracker.calculate_observational_params(sat_id=self.sat_id)
         az_so, el_so = obs_params["az"], obs_params["el"]
 
-        if self.wrap:
-            az_so = self.wrap_angle(az_so)
+        if self.cw:
+            az_so = self.clockwise_angle(az_so)
+        else:
+            az_so = self.counterclockwise_angle(az_so)
 
         assert az_so >= 0 and az_so <= 540, f"AZ_SO with value {az_so} not in range [0, 540]"
 
