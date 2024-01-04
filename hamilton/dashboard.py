@@ -666,4 +666,4 @@ def display_selection_as_json(selected_rows, clickData, data, root_sat_db):
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(debug=False)
