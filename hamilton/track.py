@@ -90,7 +90,7 @@ class TrackingThread(threading.Thread):
         valid_los_ccw = (self.counterclockwise_angle(az_los) >= 0) and (self.counterclockwise_angle(az_los) <= 540)
 
         # ensure the orbit is valid in either rotor intialization
-        if not (valid_aos_cw and valid_los_cw and valid_aos_ccw and valid_los_ccw);
+        if not (valid_aos_cw and valid_los_cw and valid_aos_ccw and valid_los_ccw):
             raise InvalidOrbit("Neither cw or ccw rotor initialization yields a valid orbit!")
 
         if cw_init:
