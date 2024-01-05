@@ -145,18 +145,25 @@ class TrackingThread(threading.Thread):
 
         return (self.clockwise_angle(az_aos), el_aos) if clockwise else (self.counterclockwise_angle(az_aos), el_aos)
 
-    def rotate_and_wait(self, az, el, angular_tolerance=0.1):
+    def rotate_and_wait(self, az, el, angular_tolerance=0.2):
         """Rotate to a specific azimuth and elevation and wait until the position is reached."""
-        if self.dry_run:
-            logger.info(f"Dry Run: Command issued - rot.set({az}, {el})")
-            logger.info(f"Dry Run: Simulated immediate arrival at AZ_ROT: {az}, EL_ROT: {el}")
-        else:
-            self.rot.set(az, el)
-            while True:
-                current_az, current_el = self.rot.status()
-                if abs(current_az - az) <= angular_tolerance and abs(current_el - el) <= angular_tolerance:
-                    break
-                time.sleep(1)  # Wait 1s before checking state again
+        try:
+            if self.dry_run:
+                logger.info(f"Dry Run: Command issued - rot.set({az}, {el})")
+                logger.info(f"Dry Run: Simulated immediate arrival at AZ_ROT: {az}, EL_ROT: {el}")
+            else:
+                self.rot.set(az, el)
+                while True:
+                    current_az, current_el = self.rot.status()
+                    logger.info(f"Status, AZ_ROT: {current_az:<6.2f}, EL_ROT: {current_el:<6.2f}")
+                    if abs(current_az - az) <= angular_tolerance and abs(current_el - el) <= angular_tolerance:
+                        break
+                    time.sleep(1)  # Wait 1s before checking state again
+        except KeyboardInterrupt:
+            # Handle Ctrl+C interruption
+            logger.info("Interrupt received, stopping rotator...")
+            self.rot.stop()
+            raise
 
     def rotate_to_aos(self):
         """Rotate to position ready for acquisition of signal. Must call before tracking satellite."""
@@ -235,6 +242,9 @@ if __name__ == "__main__":
         rot = rot2prog.ROT2Prog("/dev/usbttymd01")
         logger.info("Successfully connected to MD-01")
         logger.info(f"Rotator status: {rot.status()}")
+        logger.info(f"Rotator limits: {rot.get_limits()}")
+        logger.info(f"Setting rotator limits: {rot.set_limits(0, 540, 10, 170)}")
+        logger.info(f"Rotator limits: {rot.get_limits()}")
     except Exception as e:
         logger.error(f"Error in ROT2Prog: {e}")
 
