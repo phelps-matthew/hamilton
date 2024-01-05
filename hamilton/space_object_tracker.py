@@ -158,8 +158,8 @@ class SpaceObjectTracker:
 
         if time is None:
             time = datetime.now(tz=timezone.utc)
-        t0 = self._timescale.from_datetime(time - timedelta(minutes=20))
-        t1 = self._timescale.from_datetime(time + delta_t)
+        t0 = self._timescale.from_datetime(time - timedelta(minutes=5)) # search results from now - 5 minutes
+        t1 = self._timescale.from_datetime(time + delta_t) # search up to +delta_t hours later
 
         tle_line_1 = self._root_sat_db[sat_id]["tle1"]
         tle_line_2 = self._root_sat_db[sat_id]["tle2"]
