@@ -86,17 +86,17 @@ class TrackingThread(threading.Thread):
         event_map = self.so_tracker.get_aos_los(sat_id=self.sat_id)
         aos = event_map[0][0] if event_map[0] else None
         los = event_map[2][0] if event_map[2] else None
-        assert aos and los, "Invalid orbit, cannot aquire AOS and LOS"
+        assert bool(aos) and bool(los), "Invalid orbit, cannot aquire AOS and LOS"
 
         # acquire AOS/LOS angular parameters
         # note: azimuth from obs_params always in [0, 360]
         aos_obs_params, los_obs_params = self.so_tracker.get_aos_los_coordinates(sat_id=self.sat_id)
-        assert bool(aos_obs_params) and bool(los_obs_params), "No AOS/LOS observational parameters available"
         az_rate_aos = aos_obs_params["az_rate"]
         clockwise_orbit = az_rate_aos > 0
 
         # compute orbit
         orbit = self.so_tracker.get_interpolated_orbit(sat_id=self.sat_id, aos=aos, los=los)
+        assert bool(orbit["az"]), "No AOS/LOS observational parameters available"
         az_list = orbit["az"]
         az_aos = orbit["az"][0]
         el_aos = orbit["el"][0]
@@ -143,9 +143,17 @@ class TrackingThread(threading.Thread):
                 logger.info("Invalid ccw orbit. Initial rotation direction: cw ⤵")
                 clockwise = True
 
-        return (self.clockwise_angle(az_aos), el_aos) if clockwise else (self.counterclockwise_angle(az_aos), el_aos)
+        # Compute correct az_aos angle and halfway angle (needed since MD-01 shortway = true)
+        if clockwise:
+            az_aos = self.clockwise_angle(az_aos)
+            az_aos_half = 270 + (az_aos - 270) / 2
+        else:
+            az_aos = self.counterclockwise_angle(az_aos)
+            az_aos_half = 270 - (270 - az_aos) / 2
 
-    def rotate_and_wait(self, az, el, angular_tolerance=0.2):
+        return az_aos, az_aos_half, el_aos
+
+    def rotate_and_wait(self, az, el, angular_tolerance=0.25):
         """Rotate to a specific azimuth and elevation and wait until the position is reached."""
         try:
             if self.dry_run:
@@ -156,7 +164,12 @@ class TrackingThread(threading.Thread):
                 while True:
                     current_az, current_el = self.rot.status()
                     logger.info(f"Status, AZ_ROT: {current_az:<6.2f}, EL_ROT: {current_el:<6.2f}")
-                    if abs(current_az - az) <= angular_tolerance and abs(current_el - el) <= angular_tolerance:
+                    az_err = az - current_az
+                    if az_err >= 360:
+                        az_err = az_err % 360
+                    if az_err <= -360:
+                        az_err = az_err % -360
+                    if abs(az_err) <= angular_tolerance and abs(current_el - el) <= angular_tolerance:
                         break
                     time.sleep(1)  # Wait 1s before checking state again
         except KeyboardInterrupt:
@@ -167,7 +180,9 @@ class TrackingThread(threading.Thread):
 
     def rotate_to_aos(self):
         """Rotate to position ready for acquisition of signal. Must call before tracking satellite."""
-        az_aos, el_aos = self.get_aos_rotor_angles()
+        az_aos, az_aos_half, el_aos = self.get_aos_rotor_angles()
+        logger.info(f"Positioning rotator for *half* AOS at AZ_ROT: {az_aos_half:<6.2f}, EL_ROT: {el_aos:<6.2f}")
+        self.rotate_and_wait(az_aos_half, el_aos)
         logger.info(f"Positioning rotator for AOS at AZ_ROT: {az_aos:<6.2f}, EL_ROT: {el_aos:<6.2f}")
         self.rotate_and_wait(az_aos, el_aos)
 
@@ -198,6 +213,12 @@ class TrackingThread(threading.Thread):
         az_rot, el_rot = self.rot.status()
         az_err = az_so - az_rot
         el_err = el_so - el_rot
+
+        # account for wrapping
+        if az_err >= 360:
+            az_err = az_err % 360
+        if az_err <= -360:
+            az_err = az_err % -360
 
         # Logging the tracking information
         logger.info(
