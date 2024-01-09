@@ -109,11 +109,10 @@ class uhf_gps(gr.top_block, Qt.QWidget):
         # Sleep 1 second to ensure next PPS has come
         time.sleep(1)
 
-        self.uhd_usrp_source_0.set_center_freq(uhd.tune_request(rx_freq), 0)
+        self.uhd_usrp_source_0.set_center_freq(uhd.tune_request(rx_freq, samp_rate/2), 0)
         self.uhd_usrp_source_0.set_antenna("RX2", 0)
         self.uhd_usrp_source_0.set_bandwidth(0.2e6, 0)
         self.uhd_usrp_source_0.set_gain(rx_gain, 0)
-        self.uhd_usrp_source_0.set_auto_dc_offset(False, 0)
         self.sigmf_usrp_gps_message_source_0 = gr_sigmf.usrp_gps_message_source("", 1)
         self.sigmf_sink_0 = gr_sigmf.sink("cf32", 'cwd_filename', gr_sigmf.sigmf_time_mode_relative, False)
         self.sigmf_sink_0.set_global_meta("core:sample_rate", target_samp_rate)
@@ -176,6 +175,7 @@ class uhf_gps(gr.top_block, Qt.QWidget):
     def set_samp_rate(self, samp_rate):
         self.samp_rate = samp_rate
         self.uhd_usrp_source_0.set_samp_rate(self.samp_rate)
+        self.uhd_usrp_source_0.set_center_freq(uhd.tune_request(self.rx_freq, self.samp_rate/2), 0)
 
     def get_rx_gain(self):
         return self.rx_gain
@@ -190,7 +190,7 @@ class uhf_gps(gr.top_block, Qt.QWidget):
     def set_rx_freq(self, rx_freq):
         self.rx_freq = rx_freq
         self.qtgui_sink_x_0.set_frequency_range(self.rx_freq, self.target_samp_rate)
-        self.uhd_usrp_source_0.set_center_freq(uhd.tune_request(self.rx_freq), 0)
+        self.uhd_usrp_source_0.set_center_freq(uhd.tune_request(self.rx_freq, self.samp_rate/2), 0)
 
 
 
