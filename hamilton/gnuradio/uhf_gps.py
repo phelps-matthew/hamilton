@@ -113,7 +113,7 @@ class uhf_gps(gr.top_block, Qt.QWidget):
         self.uhd_usrp_source_0.set_antenna("RX2", 0)
         self.uhd_usrp_source_0.set_bandwidth(0.2e6, 0)
         self.uhd_usrp_source_0.set_gain(rx_gain, 0)
-        self.uhd_usrp_source_0.set_auto_dc_offset(True, 0)
+        self.uhd_usrp_source_0.set_auto_dc_offset(False, 0)
         self.sigmf_usrp_gps_message_source_0 = gr_sigmf.usrp_gps_message_source("", 1)
         self.sigmf_sink_0 = gr_sigmf.sink("cf32", 'cwd_filename', gr_sigmf.sigmf_time_mode_relative, False)
         self.sigmf_sink_0.set_global_meta("core:sample_rate", target_samp_rate)
