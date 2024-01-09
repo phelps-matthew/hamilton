@@ -25,6 +25,7 @@ from PyQt5 import Qt
 from gnuradio import qtgui
 from gnuradio.filter import firdes
 import sip
+from gnuradio import filter
 from gnuradio import gr
 from gnuradio.fft import window
 import sys
@@ -78,6 +79,7 @@ class vhf_gps(gr.top_block, Qt.QWidget):
         ##################################################
         # Variables
         ##################################################
+        self.target_samp_rate = target_samp_rate = 50e3
         self.samp_rate = samp_rate = 100e3
         self.rx_gain = rx_gain = 40
         self.rx_freq = rx_freq = 140e6
@@ -108,22 +110,27 @@ class vhf_gps(gr.top_block, Qt.QWidget):
         time.sleep(1)
 
         self.uhd_usrp_source_0.set_center_freq(uhd.tune_request(rx_freq), 0)
-        self.uhd_usrp_source_0.set_antenna("TX/RX", 0)
+        self.uhd_usrp_source_0.set_antenna("RX2", 0)
         self.uhd_usrp_source_0.set_bandwidth(0.2e6, 0)
         self.uhd_usrp_source_0.set_gain(rx_gain, 0)
         self.uhd_usrp_source_0.set_auto_dc_offset(True, 0)
         self.sigmf_usrp_gps_message_source_0 = gr_sigmf.usrp_gps_message_source("", 1)
         self.sigmf_sink_0 = gr_sigmf.sink("cf32", 'cwd_filename', gr_sigmf.sigmf_time_mode_relative, False)
-        self.sigmf_sink_0.set_global_meta("core:sample_rate", samp_rate)
+        self.sigmf_sink_0.set_global_meta("core:sample_rate", target_samp_rate)
         self.sigmf_sink_0.set_global_meta("core:description", 'Satellite RX')
         self.sigmf_sink_0.set_global_meta("core:author", 'Matthew Phelps')
         self.sigmf_sink_0.set_global_meta("core:license", '')
         self.sigmf_sink_0.set_global_meta("core:hw", 'crossed-yagi_PGA-103+_B200')
+        self.rational_resampler_xxx_0 = filter.rational_resampler_ccc(
+                interpolation=int(target_samp_rate),
+                decimation=int(samp_rate),
+                taps=[],
+                fractional_bw=0)
         self.qtgui_sink_x_0 = qtgui.sink_c(
             2048, #fftsize
             window.WIN_BLACKMAN_hARRIS, #wintype
             rx_freq, #fc
-            samp_rate, #bw
+            target_samp_rate, #bw
             "Spectrum Analyzer", #name
             True, #plotfreq
             True, #plotwaterfall
@@ -143,8 +150,9 @@ class vhf_gps(gr.top_block, Qt.QWidget):
         # Connections
         ##################################################
         self.msg_connect((self.sigmf_usrp_gps_message_source_0, 'out'), (self.sigmf_sink_0, 'gps'))
-        self.connect((self.uhd_usrp_source_0, 0), (self.qtgui_sink_x_0, 0))
-        self.connect((self.uhd_usrp_source_0, 0), (self.sigmf_sink_0, 0))
+        self.connect((self.rational_resampler_xxx_0, 0), (self.qtgui_sink_x_0, 0))
+        self.connect((self.rational_resampler_xxx_0, 0), (self.sigmf_sink_0, 0))
+        self.connect((self.uhd_usrp_source_0, 0), (self.rational_resampler_xxx_0, 0))
 
 
     def closeEvent(self, event):
@@ -155,12 +163,18 @@ class vhf_gps(gr.top_block, Qt.QWidget):
 
         event.accept()
 
+    def get_target_samp_rate(self):
+        return self.target_samp_rate
+
+    def set_target_samp_rate(self, target_samp_rate):
+        self.target_samp_rate = target_samp_rate
+        self.qtgui_sink_x_0.set_frequency_range(self.rx_freq, self.target_samp_rate)
+
     def get_samp_rate(self):
         return self.samp_rate
 
     def set_samp_rate(self, samp_rate):
         self.samp_rate = samp_rate
-        self.qtgui_sink_x_0.set_frequency_range(self.rx_freq, self.samp_rate)
         self.uhd_usrp_source_0.set_samp_rate(self.samp_rate)
 
     def get_rx_gain(self):
@@ -175,7 +189,7 @@ class vhf_gps(gr.top_block, Qt.QWidget):
 
     def set_rx_freq(self, rx_freq):
         self.rx_freq = rx_freq
-        self.qtgui_sink_x_0.set_frequency_range(self.rx_freq, self.samp_rate)
+        self.qtgui_sink_x_0.set_frequency_range(self.rx_freq, self.target_samp_rate)
         self.uhd_usrp_source_0.set_center_freq(uhd.tune_request(self.rx_freq), 0)
 
 
