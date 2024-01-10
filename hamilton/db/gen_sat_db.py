@@ -57,6 +57,18 @@ def initialize_cache_directory(directory_path="./cache"):
     cache_dir.mkdir()
     return cache_dir
 
+def initialize_cache_directory(directory_path: str | Path = "./cache", files_to_remove: list = []) -> None:
+    cache_dir = Path(directory_path)
+    # Ensure the directory exists
+    cache_dir.mkdir(exist_ok=True)
+
+    # Remove specific files if they exist
+    for file_name in files_to_remove:
+        file_path = cache_dir / file_name
+        if file_path.is_file():
+            file_path.unlink()
+    
+    return cache_dir
 
 ## Data Extraction ##
 
@@ -81,7 +93,8 @@ def fetch(use_cache=False):
 
     else:
         logging.info("Creating local cache.")
-        cache_dir = initialize_cache_directory(directory_path=cache_dir)
+        files_to_remove = ["tle.json", "satellites.json", "transmitters.json"]
+        cache_dir = initialize_cache_directory(directory_path=cache_dir, files_to_remove=files_to_remove)
 
         logging.info("Fetching TLE data.")
         tle_data = download_json_data(tle_url)
