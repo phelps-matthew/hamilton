@@ -125,11 +125,11 @@ def parse_frequencies(freq_str):
         # Check for frequency range indicated by '-'
         if "-" in freq:
             low, high = freq.split("-")
-            freqs.append({"low": float(low.strip()), "high": float(high.strip()), "active": is_active})
+            freqs.append({"low": float(low.strip()) * 1e6, "high": float(high.strip()) * 1e6, "active": is_active})
         else:
             # Single frequency value
             try:
-                freqs.append({"low": float(freq), "high": np.nan, "active": is_active})
+                freqs.append({"low": float(freq) * 1e6, "high": np.nan, "active": is_active})
             except ValueError:
                 # Handle any unexpected non-numeric values
                 continue
@@ -152,8 +152,8 @@ def merge_freq_dicts(freq_list):
 def is_within_band(freq_dict):
     # Check if any frequency in the dictionary falls within the defined bands
     for freq_info in freq_dict:
-        freq_low = freq_info["low"] * 1e6
-        freq_high = freq_info.get("high", freq_low) * 1e6  # Use low freq if high freq is not specified
+        freq_low = freq_info["low"]
+        freq_high = freq_info.get("high", freq_low)  # Use low freq if high freq is not specified
 
         if VHF_LOW <= freq_low <= VHF_HIGH or VHF_LOW <= freq_high <= VHF_HIGH:
             return True

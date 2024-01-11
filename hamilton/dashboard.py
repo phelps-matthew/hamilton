@@ -96,16 +96,17 @@ def create_dataframe(data: dict):
                 "Satellite",
                 "name",
                 "norad_id",
+                "active",
+                "aos",
+                "tca",
+                "los",
                 "az",
                 "el",
                 "az_rate",
                 "el_rate",
                 "range",
                 "rel_vel",
-                "time",
-                "aos",
-                "tca",
-                "los",
+                "time"
             ],
         )
     )
@@ -113,6 +114,7 @@ def create_dataframe(data: dict):
     df["aos"] = df["aos"].dt.strftime("%m-%d %H:%M:%S")
     df["tca"] = df["tca"].dt.strftime("%m-%d %H:%M:%S")
     df["los"] = df["los"].dt.strftime("%m-%d %H:%M:%S")
+
     return df
 
 
@@ -220,6 +222,10 @@ datatable_columns = [
     {"id": "Satellite", "name": "Satellite"},
     {"id": "name", "name": "Name"},
     {"id": "norad_id", "name": "NORAD ID", "type": "numeric"},
+    {"id": "active", "name": "Active", "type": "text"},
+    {"id": "aos", "name": "AOS", "type": "text"},
+    {"id": "tca", "name": "TCA", "type": "text"},
+    {"id": "los", "name": "LOS", "type": "text"},
     {"id": "az", "name": "AZ (deg)", "type": "numeric", "format": {"specifier": ".6f"}},
     {"id": "el", "name": "EL (deg)", "type": "numeric", "format": {"specifier": ".6f"}},
     {
@@ -246,9 +252,6 @@ datatable_columns = [
         "type": "numeric",
         "format": {"specifier": ".6f"},
     },
-    {"id": "aos", "name": "AOS", "type": "text"},
-    {"id": "tca", "name": "TCA", "type": "text"},
-    {"id": "los", "name": "LOS", "type": "text"},
 ]
 
 
@@ -666,4 +669,4 @@ def display_selection_as_json(selected_rows, clickData, data, root_sat_db):
 
 
 if __name__ == "__main__":
-    app.run_server(debug=False)
+    app.run_server(host="127.0.0.1", debug=False)

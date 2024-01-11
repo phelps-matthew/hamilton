@@ -344,4 +344,4 @@ def get_cached_db():
 
 
 if __name__ == "__main__":
-    generate_db(use_cache=True)
+    generate_db(use_cache=False)
