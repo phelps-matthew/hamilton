@@ -7,13 +7,15 @@ Need method for handling satellites that no longer have TLE in "tle.json".
 Schema validation would improve.
 """
 
-import pandas as pd
 import json
-import requests
 import logging
 from pathlib import Path
-import shutil
-from collections import Counter
+
+import numpy as np
+import pandas as pd
+import requests
+
+from hamilton.db.je9pel import generate_db as gen_je9pel_db
 
 # Hamilton frequency bands
 VHF_LOW = 130e6
@@ -49,14 +51,6 @@ def write_json_to_file(data, file_path):
         json.dump(data, file, indent=4)
 
 
-def initialize_cache_directory(directory_path="./cache"):
-    cache_dir = Path(directory_path)
-    # If directory exists, remove it and its contents.
-    if cache_dir.is_dir():
-        shutil.rmtree(directory_path)
-    cache_dir.mkdir()
-    return cache_dir
-
 def initialize_cache_directory(directory_path: str | Path = "./cache", files_to_remove: list = []) -> None:
     cache_dir = Path(directory_path)
     # Ensure the directory exists
@@ -67,8 +61,9 @@ def initialize_cache_directory(directory_path: str | Path = "./cache", files_to_
         file_path = cache_dir / file_name
         if file_path.is_file():
             file_path.unlink()
-    
+
     return cache_dir
+
 
 ## Data Extraction ##
 
@@ -180,58 +175,34 @@ def filter_by_transmitter_frequency(df: pd.DataFrame) -> dict:
     df_exploded = df.explode("transmitters")
 
     # Create two new columns corresponding to downlink high and low
-    df_exploded["tx_dl_low"] = df_exploded["transmitters"].map(
-        lambda x: x["downlink_high"]
-    )
-    df_exploded["tx_dl_high"] = df_exploded["transmitters"].map(
-        lambda x: x["downlink_low"]
-    )
+    df_exploded["tx_dl_low"] = df_exploded["transmitters"].map(lambda x: x["downlink_high"])
+    df_exploded["tx_dl_high"] = df_exploded["transmitters"].map(lambda x: x["downlink_low"])
 
     # Create two new columns associated with tx alive (true, false) and status (active, inactive)
     df_exploded["tx_alive"] = df_exploded["transmitters"].map(lambda x: x["alive"])
     df_exploded["tx_status"] = df_exploded["transmitters"].map(lambda x: x["status"])
 
     # Filter out dead or inactive transmitters
-    df_exploded = df_exploded[
-        (df_exploded["tx_alive"] == True) & (df_exploded["tx_status"] == "active")
-    ]
+    df_exploded = df_exploded[(df_exploded["tx_alive"] == True) & (df_exploded["tx_status"] == "active")]
 
     # Filter out null downlink low AND high freqs
-    df_exploded = df_exploded[
-        df_exploded["tx_dl_low"].notnull() | df_exploded["tx_dl_high"].notnull()
-    ]
+    df_exploded = df_exploded[df_exploded["tx_dl_low"].notnull() | df_exploded["tx_dl_high"].notnull()]
 
     # Replace nans in transmitter downlink freq ranges with its associated high or low
-    df_exploded["tx_dl_low"] = df_exploded["tx_dl_low"].fillna(
-        df_exploded["tx_dl_high"]
-    )
-    df_exploded["tx_dl_high"] = df_exploded["tx_dl_high"].fillna(
-        df_exploded["tx_dl_low"]
-    )
+    df_exploded["tx_dl_low"] = df_exploded["tx_dl_low"].fillna(df_exploded["tx_dl_high"])
+    df_exploded["tx_dl_high"] = df_exploded["tx_dl_high"].fillna(df_exploded["tx_dl_low"])
 
     # Filter transmitter frequences to specified VHF range
     df_filtered = df_exploded[
-        (
-            (df_exploded["tx_dl_low"] >= VHF_LOW)
-            & (df_exploded["tx_dl_high"] <= VHF_HIGH)
-        )
-        | (
-            (df_exploded["tx_dl_low"] >= UHF_LOW)
-            & (df_exploded["tx_dl_high"] <= UHF_HIGH)
-        )
+        ((df_exploded["tx_dl_low"] >= VHF_LOW) & (df_exploded["tx_dl_high"] <= VHF_HIGH))
+        | ((df_exploded["tx_dl_low"] >= UHF_LOW) & (df_exploded["tx_dl_high"] <= UHF_HIGH))
     ]
 
     # "Implode" the dataframe, s.t. each row now represents a satellite with many transmitters
     agg_cols = {
-        col: "first"
-        for col in df_filtered.columns
-        if col not in ["transmitters", "sat_id", "tx_dl_low", "tx_dl_high"]
+        col: "first" for col in df_filtered.columns if col not in ["transmitters", "sat_id", "tx_dl_low", "tx_dl_high"]
     }
-    df_imploded = (
-        df_filtered.groupby("sat_id")
-        .agg({**agg_cols, "transmitters": lambda x: x.tolist()})
-        .reset_index()
-    )
+    df_imploded = df_filtered.groupby("sat_id").agg({**agg_cols, "transmitters": lambda x: x.tolist()}).reset_index()
 
     return df_imploded
 
@@ -249,9 +220,7 @@ def transform(tle_data, satellite_data, transmitter_data):
 
     # Validate and merge norad_cat_ids.
     norad_cat_id_equal = df["norad_cat_id_x"].equals(df["norad_cat_id_y"].astype(int))
-    assert (
-        norad_cat_id_equal
-    ), "`norad_cat_id` mismatch between tle.json and satellites.json"
+    assert norad_cat_id_equal, "`norad_cat_id` mismatch between tle.json and satellites.json"
     df = df.drop("norad_cat_id_y", axis=1)
     df = df.rename(columns={"norad_cat_id_x": "norad_cat_id"})
 
@@ -300,16 +269,35 @@ def transform(tle_data, satellite_data, transmitter_data):
 ## Format ##
 
 
-def format(data):
+def format(data) -> dict:
     """Re-index the dictionary by satnogs 'sat_id' as the primary key"""
     logging.info("Reindexing data to use sat_UUID as primary key.")
     satcom_db = {}
     for d in data:
         key = d["sat_id"]
         inner_dict = d.copy()
-        #inner_dict.pop("sat_id")
         satcom_db[key] = inner_dict
     return satcom_db
+
+
+## Merge ##
+def merge_with_je9pel(data: dict, je9pel_data: dict):
+    # Iterate over each item in the satcom dictionary
+    for sat_id, details in data.items():
+        # Get the 'norad_cat_id' from the current entry
+        norad_cat_id = details.get("norad_cat_id")
+
+        # Check if 'norad_cat_id' exists in the je9pel dictionary
+        if norad_cat_id in je9pel_data:
+            # Add the corresponding entry from the je9pel dictionary
+            # under the key "je9pel"
+            details["je9pel"] = je9pel_data[norad_cat_id]
+
+        else:
+            details["je9pel"] = None
+            logging.info(f"NORAD CAT ID {norad_cat_id} in JE9PEL but not Satnogs DB. Skipping..")
+
+    return data
 
 
 ## Entrypoint ##
@@ -333,6 +321,10 @@ def generate_db(use_cache=False):
     # Format
     data = format(data)
 
+    # Merge with JE9PEL
+    je9pel_data = gen_je9pel_db(use_cache=use_cache)
+    data = merge_with_je9pel(data, je9pel_data)
+
     # Export as json
     path = Path(__file__).parent / "satcom.json"
     write_json_to_file(data, path)
@@ -352,4 +344,4 @@ def get_cached_db():
 
 
 if __name__ == "__main__":
-    generate_db(use_cache=False)
+    generate_db(use_cache=True)
