@@ -43,3 +43,8 @@ if __name__ == "__main__":
 
     # Start listening for status updates
     client.start_listening()
+
+    client.send_command('status')
+    import time
+    time.sleep(2)
+    client.send_command('status')
