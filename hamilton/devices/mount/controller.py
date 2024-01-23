@@ -4,7 +4,7 @@ from hamilton.devices.mount.driver import ROT2Prog
 
 class MountController:
     def __init__(self, rabbitmq_server, command_queue, status_queue):
-        self.mount = ROT2Prog()  # Initialize the ROT2Prog instance
+        self.mount = ROT2Prog("/dev/usbttymd01")  # Initialize the ROT2Prog instance
         self.command_queue = command_queue
         self.status_queue = status_queue
 
