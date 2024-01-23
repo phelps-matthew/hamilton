@@ -39,7 +39,7 @@ if __name__ == "__main__":
     client.send_command('status')
 
     # Set the state of the rotor
-    client.send_command('set', {'azimuth': 45, 'elevation': 30})
+    client.send_command('set', {'azimuth': 270, 'elevation': 90})
 
     # Start listening for status updates
     client.start_listening()
