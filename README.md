@@ -72,3 +72,6 @@ hamilton/
 │
 └── README.md
 ```
+
+# Notes
+* Installation: chmod +x mount.py

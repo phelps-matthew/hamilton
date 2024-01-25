@@ -6,10 +6,8 @@ class Config:
 
     # Service Manager Configuration
     SERVICES = [
-        'mount_controller',
-        'sdr_controller',
-        'camera_controller',
-        'relay_controller'
+        "hamilton-log-collector",
+        'hamilton-mount-controller',
     ]
 
     STATUS_UPDATE_INTERVAL = 60  # Time interval (in seconds) for sending status updates

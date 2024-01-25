@@ -1,0 +1,13 @@
+[Unit]
+Description=Database Update Service
+Requires=rabbitmq-server.service
+After=network.target rabbitmq-server.service
+
+[Service]
+User=mgp
+ExecStart=/path/to/python /path/to/rf_groundstation/database/db_update.py
+Restart=on-failure
+WorkingDirectory=/path/to/rf_groundstation/database/
+
+[Install]
+WantedBy=multi-user.target

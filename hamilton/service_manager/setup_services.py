@@ -43,8 +43,10 @@ def setup_service(service_name):
 
     # Restart the service if it was already running, else start it
     if is_service_active(service_name):
+        print(f"Restarting {service_name}")
         subprocess.run(["sudo", "systemctl", "restart", service_name])
     else:
+        print(f"Starting {service_name}")
         subprocess.run(["sudo", "systemctl", "start", service_name])
 
 def main(setup_all):
@@ -53,13 +55,6 @@ def main(setup_all):
 
     for service in services:
         setup_service(service)
-
-    # Remove symlinks for services not in the list
-    existing_services = [p.name for p in SYSTEMD_DIR.iterdir() if p.is_symlink()]
-    for service in existing_services:
-        if service not in services:
-            print(f"Removing unused service symlink: {service}")
-            (SYSTEMD_DIR / service).unlink()
 
     print("All services have been set up or updated.")
 
