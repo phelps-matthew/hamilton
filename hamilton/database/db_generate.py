@@ -12,19 +12,17 @@ import logging
 from pathlib import Path
 import requests
 import pandas as pd
-from hamilton.database.je9pel import generate_db as gen_je9pel_db
+from hamilton.database.config import Config
+from hamilton.database.je9pel import JE9PELGenerator
 
 
 class SatcomDBGenerator:
-    VHF_LOW = 130e6
-    VHF_HIGH = 150e6
-    UHF_LOW = 410e6
-    UHF_HIGH = 440e6
-
-    def __init__(self, logger=None):
-        self.transmitters_url = "https://db.satnogs.org/api/transmitters/?format=json"
-        self.satellites_url = "https://db.satnogs.org/api/satellites/?format=json"
-        self.tle_url = "https://db.satnogs.org/api/tle/?format=json"
+    def __init__(self, config, je9pel, logger=None):
+        self.config = config
+        self.je9pel = je9pel
+        self.transmitters_url = config.SATNOGS_TRANSMITTERS_URL
+        self.satellites_url = config.SATNOGS_SATELLITES_URL
+        self.tle_url = config.SATNOGS_TLE_URL
         self.cache_dir = Path(__file__).parent / "cache"
         if logger:
             self.log = logger
@@ -34,7 +32,7 @@ class SatcomDBGenerator:
                 datefmt="%Y-%m-%d %H:%M:%S",
                 level=logging.INFO,
             )
-            self.log = logging.info
+            self.log = lambda x, y: logging.info(y)
 
     ## I/O and HTTP Requests ##
 
@@ -184,8 +182,8 @@ class SatcomDBGenerator:
 
         # Filter transmitter frequences to specified VHF range
         df_filtered = df_exploded[
-            ((df_exploded["tx_dl_low"] >= self.VHF_LOW) & (df_exploded["tx_dl_high"] <= self.VHF_HIGH))
-            | ((df_exploded["tx_dl_low"] >= self.UHF_LOW) & (df_exploded["tx_dl_high"] <= self.UHF_HIGH))
+            ((df_exploded["tx_dl_low"] >= self.config.VHF_LOW) & (df_exploded["tx_dl_high"] <= self.config.VHF_HIGH))
+            | ((df_exploded["tx_dl_low"] >= self.config.UHF_LOW) & (df_exploded["tx_dl_high"] <= self.config.UHF_HIGH))
         ]
 
         # "Implode" the dataframe, s.t. each row now represents a satellite with many transmitters
@@ -307,10 +305,11 @@ class SatcomDBGenerator:
         self.validate_norad_ids(data)
 
         # Format
-        data = format(data)
+        data = self.format(data)
 
         # Merge with JE9PEL
-        je9pel_data = gen_je9pel_db(use_cache=use_cache)
+        je9pel_data = self.je9pel.generate_db(use_cache=use_cache)
+        # import ipdb; ipdb.set_trace()
         data = self.merge_with_je9pel(data, je9pel_data)
 
         # Export as json
@@ -331,5 +330,6 @@ class SatcomDBGenerator:
 
 
 if __name__ == "__main__":
-    generator = SatcomDBGenerator()
+    je9pel = JE9PELGenerator(Config)
+    generator = SatcomDBGenerator(Config, je9pel)
     generator.generate_db(use_cache=False)

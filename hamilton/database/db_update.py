@@ -3,11 +3,14 @@ import pika
 import time
 from threading import Lock
 from hamilton.database.config import Config
-from hamilton.database.gen_sat_db import generate_db
+from hamilton.database.je9pel import JE9PELGenerator
+from hamilton.database.db_generate import SatcomDBGenerator
+
 
 class DBUpdateService:
-    def __init__(self, config):
+    def __init__(self, config, db_generator):
         self.config = config
+        self.db_generator = db_generator
         self.connection = pika.BlockingConnection(pika.ConnectionParameters(self.config.RABBITMQ_SERVER))
         self.channel = self.connection.channel()
         self.channel.queue_declare(queue=self.config.LOGGING_QUEUE)
@@ -30,6 +33,9 @@ class DBUpdateService:
             self.update_database()
             time.sleep(self.config.UPDATE_INTERVAL)  # Interval based on config
 
+
 if __name__ == "__main__":
-    update_service = DBUpdateService(config=Config)
+    je9pel = JE9PELGenerator(Config)
+    db_generator = SatcomDBGenerator(Config, je9pel)
+    update_service = DBUpdateService(config=Config, db_generator=db_generator)
     update_service.start()
