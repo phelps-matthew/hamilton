@@ -1,29 +1,26 @@
 import json
 import pika
 from hamilton.devices.mount.driver import ROT2Prog
-from hamilton.devices.mount.config import Config
 
 
 class MountController:
-    def __init__(self, rabbitmq_server, command_queue, status_queue, logging_queue):
-        self.mount = ROT2Prog("/dev/usbttymd01")  # Initialize the ROT2Prog instance
-        self.command_queue = command_queue
-        self.status_queue = status_queue
-        self.logging_queue = logging_queue
+    def __init__(self, config):
+        self.config = config
+        self.mount = ROT2Prog(config.DEVICE_ADDRESS)  # Initialize the ROT2Prog instance
 
         # Set up RabbitMQ connection and channel
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitmq_server))
+        self.connection = pika.BlockingConnection(pika.ConnectionParameters(config.RABBITMQ_SERVER))
         self.channel = self.connection.channel()
-        self.channel.queue_declare(queue=self.command_queue)
+        self.channel.queue_declare(queue=config.COMMAND_QUEUE)
 
         # Subscribe to the command queue
         self.channel.basic_consume(
-            queue=self.command_queue, on_message_callback=self.on_command_received, auto_ack=True
+            queue=self.config.COMMAND_QUEUE, on_message_callback=self.on_command_received, auto_ack=True
         )
 
     def log_message(self, level, message):
         log_entry = {"service_name": "MountController", "level": level, "message": message}
-        self.channel.basic_publish(exchange="", routing_key=self.logging_queue, body=json.dumps(log_entry))
+        self.channel.basic_publish(exchange="", routing_key=self.config.LOGGING_QUEUE, body=json.dumps(log_entry))
 
     def on_command_received(self, ch, method, properties, body):
         message = json.loads(body)
@@ -42,7 +39,7 @@ class MountController:
             self.publish_status(status)
 
     def publish_status(self, status):
-        self.channel.basic_publish(exchange="", routing_key=self.status_queue, body=json.dumps(status))
+        self.channel.basic_publish(exchange="", routing_key=self.config.STATUS_QUEUE, body=json.dumps(status))
 
     def start(self):
         self.log_message("INFO", "MountController starting")
@@ -50,10 +47,7 @@ class MountController:
 
 
 if __name__ == "__main__":
-    controller = MountController(
-        rabbitmq_server=Config.RABBITMQ_SERVER,
-        command_queue="mount_commands",
-        status_queue="mount_status",
-        logging_queue="logging_queue",
-    )
+    from hamilton.devices.mount.config import Config
+
+    controller = MountController(config=Config)
     controller.start()

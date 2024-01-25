@@ -1,0 +1,13 @@
+[Unit]
+Description=Systemd Status Publisher Service
+Requires=rabbitmq-server.service hamilton-log-collector.service 
+After=network.target rabbitmq-server.service hamilton-log-collector.service 
+
+[Service]
+User=mgp
+ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/service_manager/service_status_publisher.py
+Restart=always
+WorkingDirectory=/home/mgp/dev/hamilton/hamilton/service_manager/
+
+[Install]
+WantedBy=multi-user.target

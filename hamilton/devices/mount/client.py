@@ -1,50 +1,55 @@
 import json
 import pika
-import uuid
 
-class MountClient:
-    def __init__(self, rabbitmq_server, command_queue, status_queue):
-        self.command_queue = command_queue
-        self.status_queue = status_queue
 
-        # Set up RabbitMQ connection and channel
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitmq_server))
-        self.channel = self.connection.channel()
-        self.channel.queue_declare(queue=self.command_queue)
-        self.channel.queue_declare(queue=self.status_queue)
+def send_command(rabbitmq_server, command_queue, command, parameters=None):
+    connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitmq_server))
+    channel = connection.channel()
+    channel.queue_declare(queue=command_queue)
 
-        # Subscribe to the status queue
-        self.channel.basic_consume(queue=self.status_queue, on_message_callback=self.on_status_received, auto_ack=True)
+    message = {"command": command, "parameters": parameters}
+    channel.basic_publish(exchange="", routing_key=command_queue, body=json.dumps(message))
 
-    def send_command(self, command, parameters=None):
-        message = {'command': command}
-        if parameters:
-            message['parameters'] = parameters
-        self.channel.basic_publish(exchange='', routing_key=self.command_queue, body=json.dumps(message))
+    connection.close()
 
-    def on_status_received(self, ch, method, properties, body):
-        print("Received status update:", body.decode())
-
-    def start_listening(self):
-        print("Starting to listen for status updates...")
-        self.channel.start_consuming()
-
-    def close(self):
-        self.connection.close()
 
 if __name__ == "__main__":
-    client = MountClient(rabbitmq_server='localhost', command_queue='mount_commands', status_queue='mount_status')
-    
-    # Query the status of the rotor
-    client.send_command('status')
+    import argparse
+    from hamilton.devices.mount.config import Config
 
-    # Set the state of the rotor
-    client.send_command('set', {'azimuth': 270, 'elevation': 90})
+    RABBITMQ_SERVER = Config.RABBITMQ_SERVER
+    COMMAND_QUEUE = Config.COMMAND_QUEUE
 
-    # Start listening for status updates
-    client.start_listening()
+    # Main parser with detailed description
+    parser = argparse.ArgumentParser(
+        description="""
+Mount CLI Client: Control the mount system using various commands.
 
-    client.send_command('status')
-    import time
-    time.sleep(2)
-    client.send_command('status')
+Usage examples:
+  mount set <azimuth> <elevation>  Set the azimuth and elevation of the mount.
+  mount status                     Request the current status of the mount.
+  mount stop                       Stop the mount controller.
+""",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    subparsers = parser.add_subparsers(dest="command", title="Commands", metavar="<command>")
+
+    # Subparser for the 'set' command
+    parser_set = subparsers.add_parser("set", help="Set azimuth and elevation")
+    parser_set.add_argument("azimuth", type=float, help="Azimuth angle")
+    parser_set.add_argument("elevation", type=float, help="Elevation angle")
+
+    # Subparser for the 'status' command
+    parser_status = subparsers.add_parser("status", help="Request status")
+
+    # Subparser for the 'stop' command
+    parser_stop = subparsers.add_parser("stop", help="Stop the mount controller")
+
+    args = parser.parse_args()
+
+    if args.command == "set":
+        send_command(RABBITMQ_SERVER, COMMAND_QUEUE, "set", {"azimuth": args.azimuth, "elevation": args.elevation})
+    elif args.command == "status":
+        send_command(RABBITMQ_SERVER, COMMAND_QUEUE, "status")
+    elif args.command == "stop":
+        send_command(RABBITMQ_SERVER, COMMAND_QUEUE, "stop")
