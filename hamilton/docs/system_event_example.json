@@ -1,0 +1,14 @@
+{
+    "messageType": "event",
+    "eventType": "systemEvent",
+    "timestamp": "2024-01-29T13:00:00Z",
+    "source": "schedulingSystem",
+    "version": "1.0",
+    "payload": {
+      "eventName": "observationScheduled",
+      "details": {
+        "target": "GOES-17",
+        "startTime": "2024-01-29T14:00:00Z"
+      }
+    }
+  }

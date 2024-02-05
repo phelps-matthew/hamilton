@@ -17,7 +17,7 @@ from hamilton.database.je9pel import JE9PELGenerator
 
 
 class SatcomDBGenerator:
-    def __init__(self, config, je9pel, logger=None):
+    def __init__(self, config: Config, je9pel: JE9PELGenerator, logger=None):
         self.config = config
         self.je9pel = je9pel
         self.transmitters_url = config.SATNOGS_TRANSMITTERS_URL
@@ -33,6 +33,10 @@ class SatcomDBGenerator:
                 level=logging.INFO,
             )
             self.log = lambda x, y: logging.info(y)
+
+    def set_logger(self, logger):
+        self.log = logger
+        self.je9pel.set_logger(logger)
 
     ## I/O and HTTP Requests ##
 

@@ -1,0 +1,17 @@
+{
+    "messageType": "event",
+    "eventType": "statusUpdate",
+    "timestamp": "2024-01-29T13:45:00Z",
+    "source": "mountControl",
+    "version": "1.0",
+    "payload": {
+      "eventName": "mountPosition",
+      "details": {
+        "currentPosition": {
+          "azimuth": 180,
+          "elevation": 45
+        },
+        "status": "tracking"
+      }
+    }
+  }

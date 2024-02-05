@@ -1,0 +1,44 @@
+{
+    "type": "object",
+    "properties": {
+      "messageType": {
+        "type": "string",
+        "enum": ["command"],
+        "description": "Indicates that this is a command message."
+      },
+      "timestamp": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Timestamp of when the command was issued."
+      },
+      "source": {
+        "type": "string",
+        "description": "Identifier for the source of the command."
+      },
+      "version": {
+        "type": "string",
+        "description": "Version of the command message format."
+      },
+      "payload": {
+        "type": "object",
+        "properties": {
+          "commandType": {
+            "type": "string",
+            "description": "Type of command to be executed."
+          },
+          "parameters": {
+            "type": "object",
+            "description": "Parameters relevant to the command.",
+            "properties": {
+              // Define specific parameters here
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["commandType", "parameters"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["messageType", "timestamp", "source", "version", "payload"],
+    "additionalProperties": false
+  }

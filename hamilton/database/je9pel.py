@@ -32,6 +32,9 @@ class JE9PELGenerator:
             )
             self.log = lambda x, y: logging.info(y)
 
+    def set_logger(self, logger):
+        self.log = logger
+
     ## I/O and HTTP Requests ##
 
     @staticmethod

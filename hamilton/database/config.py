@@ -2,6 +2,8 @@ class Config:
     RABBITMQ_SERVER = "localhost"
     LOGGING_QUEUE = "logging_queue"
     UPDATE_INTERVAL = 3600  # Update every hour
+    DB_QUERY_COMMAND_QUEUE = "db_query_command_queue"
+    DB_PATH = "./satcom.json"
 
     VHF_LOW = 130e6
     VHF_HIGH = 150e6
