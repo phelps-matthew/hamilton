@@ -263,11 +263,12 @@ class SatcomDBGenerator:
     ## Format ##
 
     def format(self, data) -> dict:
-        """Re-index the dictionary by satnogs 'sat_id' as the primary key"""
-        self.log("INFO", "Reindexing data to use sat_UUID as primary key.")
+        """Re-index the dictionary by satnogs 'norad_cat_id' as the primary key"""
+        self.log("INFO", "Reindexing data to use norad_cat_id as primary key.")
         satcom_db = {}
         for d in data:
-            key = d["sat_id"]
+            #key = d["sat_id"]
+            key = d["norad_cat_id"]
             inner_dict = d.copy()
             satcom_db[key] = inner_dict
         return satcom_db
@@ -287,7 +288,7 @@ class SatcomDBGenerator:
 
             else:
                 details["je9pel"] = None
-                self.log("INFO", f"NORAD CAT ID {norad_cat_id} in JE9PEL but not Satnogs DB. Skipping..")
+                self.log("DEBUG", f"NORAD CAT ID {norad_cat_id} in JE9PEL but not Satnogs DB. Skipping..")
 
         return data
 
