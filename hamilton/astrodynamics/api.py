@@ -165,7 +165,7 @@ class SpaceObjectTracker:
         return orbit
 
     def precompute_orbit(self, sat_id: str) -> None:
-        """Precomepute space object orbit trajectory and AOS, TCA, LOS parameters"""
+        """Precompute space object orbit trajectory and AOS, TCA, LOS parameters"""
         time = datetime.now(tz=timezone.utc)
         event_map = self.get_aos_los(sat_id=sat_id, time=time)
         aos = self.utc_to_local(event_map[0][0]) if event_map[0] else None

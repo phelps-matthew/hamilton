@@ -1,6 +1,7 @@
 import pika
 import json
 import datetime
+from hamilton.logging.config import Config
 
 
 class LogCollector:
@@ -25,7 +26,5 @@ class LogCollector:
 
 
 if __name__ == "__main__":
-    from hamilton.logging.config import Config
-
     collector = LogCollector(Config)
     collector.start_consuming()

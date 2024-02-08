@@ -22,7 +22,7 @@ class DBQueryService:
         log_entry = {"service_name": "DBQueryService", "level": level, "message": message}
         self.channel.basic_publish(exchange="", routing_key=self.config.LOGGING_QUEUE, body=json.dumps(log_entry))
 
-    def load_data(self, key):
+    def load_data(self, key) -> dict:
         with self.db_lock:
             with open(self.config.DB_PATH, "r") as file:
                 data = json.load(file)

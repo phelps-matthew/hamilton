@@ -1,10 +1,11 @@
 import json
 import pika
-from hamilton.devices.mount.driver import ROT2Prog
+from hamilton.devices.mount.api import ROT2Prog
+from hamilton.devices.mount.config import Config
 
 
 class MountController:
-    def __init__(self, config):
+    def __init__(self, config: Config):
         self.config = config
         self.mount = ROT2Prog(config.DEVICE_ADDRESS)  # Initialize the ROT2Prog instance
 
@@ -61,12 +62,10 @@ class MountController:
 
     def start(self):
         print("Starting MountController...")
-        self.log_message("INFO", "MountController starting")
+        self.log_message("INFO", "Starting MountController...")
         self.channel.start_consuming()
 
 
 if __name__ == "__main__":
-    from hamilton.devices.mount.config import Config
-
     controller = MountController(config=Config)
     controller.start()
