@@ -10,6 +10,7 @@ import pytz
 from skyfield.api import EarthSatellite, load, wgs84
 
 from hamilton.astrodynamics.config import Config
+from hamilton.common.utils import CustomJSONEncoder
 
 
 class SpaceObjectTracker:
@@ -26,7 +27,6 @@ class SpaceObjectTracker:
         self.corr_id = None
 
         # Astrodynamics init
-        # self._max_space_objects = float("inf")
         self._timescale = load.timescale()
         self._sensor = wgs84.latlon(
             latitude_degrees=config.LATTITUDE,
@@ -55,7 +55,7 @@ class SpaceObjectTracker:
                 reply_to=self.callback_queue,
                 correlation_id=self.corr_id,
             ),
-            body=json.dumps(message),
+            body=json.dumps(message, cls=CustomJSONEncoder),
         )
 
         while self.response is None:
@@ -164,10 +164,9 @@ class SpaceObjectTracker:
                 orbit["time"].append(self.utc_to_local(t).strftime("%m-%d %H:%M:%S"))
         return orbit
 
-    def precomute_orbit(self, sat_id: str) -> None:
+    def precompute_orbit(self, sat_id: str) -> None:
         """Precomepute space object orbit trajectory and AOS, TCA, LOS parameters"""
         time = datetime.now(tz=timezone.utc)
-        print("Updating all AOS, TCA, and LOS parameters")
         event_map = self.get_aos_los(sat_id=sat_id, time=time)
         aos = self.utc_to_local(event_map[0][0]) if event_map[0] else None
         tca = self.utc_to_local(event_map[1][0]) if event_map[1] else None
@@ -179,14 +178,6 @@ class SpaceObjectTracker:
 
     @staticmethod
     def utc_to_local(time, tz="HST"):
-        """Convert UTC datetime to local datetime
-
-        Args:
-            time: datetime object in UTC timezone
-            tz: pytz timezone string identifier
-        Returns:
-            local_time: local datetime object
-        """
         local_timezone = pytz.timezone(tz)
         return time.replace(tzinfo=pytz.utc).astimezone(local_timezone)
 
@@ -200,7 +191,7 @@ if __name__ == "__main__":
 
     so_tracker = SpaceObjectTracker(Config)
     sat_id = "39446"
-    so_tracker.precomute_orbit(sat_id=sat_id)
+    so_tracker.precompute_orbit(sat_id=sat_id)
     pp(so_tracker.aos_los)
     pp(so_tracker.orbits)
     pp(so_tracker.satellites)
