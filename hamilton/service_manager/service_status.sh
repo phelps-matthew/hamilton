@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Path to the directory containing .service files
-SERVICE_DIR="../systemd"
+SERVICE_DIR="/home/mgp/dev/hamilton/hamilton/systemd"
 
 # Define a separator for readability
 SEPARATOR=$(printf '%*s\n' 50 '' | tr ' ' '-')
