@@ -11,36 +11,43 @@ class DBQueryService:
         self.config = config
         self.connection = pika.BlockingConnection(pika.ConnectionParameters(config.RABBITMQ_SERVER))
         self.channel = self.connection.channel()
-        self.channel.queue_declare(queue=config.DB_QUERY_COMMAND_QUEUE)
+        self.channel.queue_declare(queue=config.COMMAND_QUEUE)
         self.channel.queue_declare(queue=config.LOGGING_QUEUE)
         self.db_lock = Lock()
 
         # Subscribe to the command queue
-        self.channel.basic_consume(queue=self.config.DB_QUERY_COMMAND_QUEUE, on_message_callback=self.on_request)
+        self.channel.basic_consume(queue=self.config.COMMAND_QUEUE, on_message_callback=self.on_request)
 
     def log_message(self, level, message):
         log_entry = {"service_name": "DBQueryService", "level": level, "message": message}
         self.channel.basic_publish(exchange="", routing_key=self.config.LOGGING_QUEUE, body=json.dumps(log_entry))
 
-    def load_data(self, key) -> dict:
+    def query_record(self, key) -> dict:
         with self.db_lock:
             with open(self.config.DB_PATH, "r") as file:
                 data = json.load(file)
                 return data.get(key, {})
 
+    def get_record_keys(self) -> list:
+        with self.db_lock:
+            with open(self.config.DB_PATH, "r") as file:
+                data = json.load(file)
+                return list(data.keys())
+
     def on_request(self, ch, method, properties, body):
         message = json.loads(body)
         command = message.get("command")
         parameters = message.get("parameters", {})
-
         self.log_message("INFO", f"Received command: {message}")
-
         response = None
 
         # Process the command
         if command == "query":
             sat_id = parameters.get("sat_id")
-            response = self.load_data(sat_id)
+            response = self.query_record(sat_id)
+        elif command == "get_keys":
+            response = self.get_record_keys()
+
 
         ch.basic_publish(
             exchange="",
