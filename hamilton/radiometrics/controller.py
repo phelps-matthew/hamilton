@@ -1,14 +1,14 @@
 import json
 import pika
-from hamilton.astrodynamics.config import Config
-from hamilton.astrodynamics.api import SpaceObjectTracker
+from hamilton.radiometrics.config import Config
+from hamilton.radiometrics.api import Radiometrics
 from hamilton.common.utils import CustomJSONEncoder
 
 
-class AstrodynamicsController:
-    def __init__(self, config: Config, so_tracker: SpaceObjectTracker):
+class RadiometricsController:
+    def __init__(self, config: Config, radiometrics: Radiometrics):
         self.config = config
-        self.so_tracker = so_tracker
+        self.radiometrics = radiometrics
 
         # Set up RabbitMQ connection and channel
         self.connection = pika.BlockingConnection(pika.ConnectionParameters(config.RABBITMQ_SERVER))
@@ -45,22 +45,12 @@ class AstrodynamicsController:
 
     def process_command(self, command: str, parameters: str):
         response = None
-        if command == "get_kinematic_state":
+        if command == "get_tx_profile":
             sat_id = parameters.get("sat_id")
-            time = parameters.get("time", None)
-            response = self.so_tracker.get_kinematic_state(sat_id, time)
-        elif command == "get_kinematic_aos_los":
+            response = self.radiometrics.get_tx_profile(sat_id)
+        elif command == "get_downlink_freqs":
             sat_id = parameters.get("sat_id")
-            time = parameters.get("time", None)
-            response = self.so_tracker.get_aos_los(sat_id, time)
-        elif command == "get_interpolated_orbit":
-            sat_id = parameters.get("sat_id")
-            aos = parameters.get("aos")
-            los = parameters.get("los")
-            response = self.so_tracker.get_interpolated_orbit(sat_id, aos, los)
-        elif command == "precompute_orbit":
-            sat_id = parameters.get("sat_id")
-            response = self.so_tracker.precompute_orbit(sat_id)
+            response = self.radiometrics.get_downlink_freqs(sat_id)
 
         return response
 
@@ -77,6 +67,6 @@ class AstrodynamicsController:
 
 
 if __name__ == "__main__":
-    so_tracker = SpaceObjectTracker(config=Config)
-    controller = AstrodynamicsController(config=Config, so_tracker=so_tracker)
+    radiometrics = Radiometrics(config=Config)
+    controller = RadiometricsController(config=Config, radiometrics=radiometrics)
     controller.start()

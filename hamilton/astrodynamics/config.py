@@ -4,7 +4,7 @@ class Config:
     LOGGING_QUEUE = 'logging_queue'
     COMMAND_QUEUE = "astrodynamics_commands"
     STATUS_QUEUE = "astrodynamics_status"
-    DB_QUERY_COMMAND_QUEUE = "db_query_command_queue"
+    DB_COMMAND_QUEUE = "db_query_commands"
 
     # RME
     LATTITUDE = 20.7464000000

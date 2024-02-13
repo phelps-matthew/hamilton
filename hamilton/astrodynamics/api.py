@@ -50,7 +50,7 @@ class SpaceObjectTracker:
         self.corr_id = str(uuid.uuid4())
         self.channel.basic_publish(
             exchange="",
-            routing_key=self.config.DB_QUERY_COMMAND_QUEUE,
+            routing_key=self.config.DB_COMMAND_QUEUE,
             properties=pika.BasicProperties(
                 reply_to=self.callback_queue,
                 correlation_id=self.corr_id,
