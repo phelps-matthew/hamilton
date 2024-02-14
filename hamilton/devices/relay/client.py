@@ -1,6 +1,3 @@
-#!/home/mgp/miniforge3/envs/gr39/bin/python
-
-
 from hamilton.base.client import BaseClient
 from hamilton.devices.relay.config import Config
 
@@ -23,4 +20,3 @@ if __name__ == "__main__":
     parameters = {"id": "uhf_bias", "state": "on"}
     response = client.send_command(command, parameters)
     print(response)
-
