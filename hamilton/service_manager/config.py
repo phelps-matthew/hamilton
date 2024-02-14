@@ -14,6 +14,7 @@ class Config(GlobalConfig):
         "hamilton-database-query",
         "hamilton-astrodynamics",
         "hamilton-radiometrics",
+        "hamilton-relay-controller",
     ]
 
     STATUS_UPDATE_INTERVAL = 60  # Time interval (in seconds) for sending status updates

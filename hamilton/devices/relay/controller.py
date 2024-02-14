@@ -1,72 +1,44 @@
-import json
-import pika
+from hamilton.base.controller import BaseController
 from hamilton.devices.relay.api import FTDIBitbangRelay
 from hamilton.devices.relay.config import Config
 
 
-class RelayController:
+class RelayController(BaseController):
     def __init__(self, config: Config, relay_driver: FTDIBitbangRelay):
+        super().__init__(config)
         self.config = config
         self.relay = relay_driver
+        self.id_map = {"uhf_bias": 1, "vhf_bias": 2, "vhf_pol": 3, "uhf_pol": 4}
 
-        # Set up RabbitMQ connection and channel
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(config.RABBITMQ_SERVER))
-        self.channel = self.connection.channel()
-        self.channel.queue_declare(queue=config.COMMAND_QUEUE)
-        self.channel.queue_declare(queue=config.LOGGING_QUEUE)
+    def parse_state_to_dict(self, state):
+        relay_names = ["uhf_bias", "vhf_bias", "vhf_pol", "uhf_pol"]
+        state_dict = {}
+        for i, name in enumerate(relay_names):
+            # Shift the state right by i places and check the least significant bit
+            state_dict[name] = "on" if state & (1 << i) else "off"
+        return state_dict
 
-        # Subscribe to the command queue
-        self.channel.basic_consume(
-            queue=self.config.COMMAND_QUEUE, on_message_callback=self.on_command_received, auto_ack=True
-        )
-
-    def log_message(self, level, message):
-        log_entry = {"service_name": self.__class__.name, "level": level, "message": message}
-        self.channel.basic_publish(exchange="", routing_key=self.config.LOGGING_QUEUE, body=json.dumps(log_entry))
-
-    def on_command_received(self, ch, method, properties, body):
-        message = json.loads(body)
-        command = message.get("command")
-        parameters = message.get("parameters", {})
-
-        self.log_message("INFO", "Received command: {}".format(body.decode()))
-
+    def process_command(self, command: str, parameters: str):
         response = None
-
-        # Process the command
         if command == "set":
-            az = parameters.get("azimuth")
-            el = parameters.get("elevation")
-            response = self.mount.set(az, el)
+            id = parameters.get("id")
+            state = parameters.get("state")
+            if state not in ["on", "off"]:
+                self.log_message("INFO", f"{state} not in [on, off]")
+                return response
+            if id not in self.id_map:
+                self.log_message("INFO", f"{id} not in {list(self.id_map.keys())}")
+                return response
+            else:
+                response = self.relay.set_relay(relay_num=self.id_map[id], state=state)
         elif command == "status":
-            response = self.mount.status()
-        elif command == "stop":
-            response = self.mount.stop()
+            raw_response = self.relay.get_relay_state()
+            response = self.parse_state_to_dict(raw_response)
 
-        self.publish_status(response)
-
-        # Check if 'reply_to' property is set
-        # Allow sending of direct responses to clients that explicitly request it by setting the reply_to and 
-        # correlation_id properties in their messages
-        if properties.reply_to:
-            self.channel.basic_publish(
-                exchange="",
-                routing_key=properties.reply_to,
-                properties=pika.BasicProperties(correlation_id=properties.correlation_id),
-                body=json.dumps(response),
-            )
-
-    def publish_status(self, status):
-        self.channel.basic_publish(exchange="", routing_key=self.config.STATUS_QUEUE, body=json.dumps(status))
-        self.log_message("INFO", f"Mount position: {status}")
-
-    def start(self):
-        print(f"Starting {self.__class__.__name__}...")
-        self.log_message("INFO", f"Starting {self.__class__.__name__}..")
-        self.channel.start_consuming()
+        return response
 
 
 if __name__ == "__main__":
-    relay_driver = FTDIBitbangRelay(device_id=Config.DEVICE_ID)
+    relay_driver = FTDIBitbangRelay(device_id=Config.DEVICE_ID, verbosity=2)
     controller = RelayController(config=Config, relay_driver=relay_driver)
     controller.start()
