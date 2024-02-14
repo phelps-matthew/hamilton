@@ -12,12 +12,12 @@ import logging
 from pathlib import Path
 import requests
 import pandas as pd
-from hamilton.database.config import Config
+from hamilton.database.config import DBUpdateConfig
 from hamilton.database.je9pel import JE9PELGenerator
 
 
 class SatcomDBGenerator:
-    def __init__(self, config: Config, je9pel: JE9PELGenerator, logger=None):
+    def __init__(self, config: DBUpdateConfig, je9pel: JE9PELGenerator, logger=None):
         self.config = config
         self.je9pel = je9pel
         self.transmitters_url = config.SATNOGS_TRANSMITTERS_URL
@@ -335,6 +335,6 @@ class SatcomDBGenerator:
 
 
 if __name__ == "__main__":
-    je9pel = JE9PELGenerator(Config)
-    generator = SatcomDBGenerator(Config, je9pel)
+    je9pel = JE9PELGenerator(DBUpdateConfig)
+    generator = SatcomDBGenerator(DBUpdateConfig, je9pel)
     generator.generate_db(use_cache=False)

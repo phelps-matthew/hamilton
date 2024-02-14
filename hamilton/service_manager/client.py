@@ -19,6 +19,7 @@ def print_colored(text, color):
 
 
 
+# NOT USED
 class ServiceViewerClient:
     def __init__(self, config: Config):
         self.config = config

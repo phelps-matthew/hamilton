@@ -1,7 +1,7 @@
-class Config:
-    RABBITMQ_SERVER = 'localhost'
-    # ... other configurations ...
-    LOGGING_QUEUE = 'logging_queue'  # Name of the logging queue
+from hamilton.base.config import GlobalConfig
+
+
+class Config(GlobalConfig):
     COMMAND_QUEUE = "mount_commands"
     STATUS_QUEUE = "mount_status"
 

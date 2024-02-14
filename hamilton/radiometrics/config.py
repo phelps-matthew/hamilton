@@ -1,8 +1,6 @@
-class Config:
-    # Queues
-    RABBITMQ_SERVER = 'localhost'
-    LOGGING_QUEUE = 'logging_queue'
+from hamilton.base.config import GlobalConfig
+
+
+class Config(GlobalConfig):
     COMMAND_QUEUE = "radiometrics_commands"
     STATUS_QUEUE = "radiometrics_status"
-    DB_COMMAND_QUEUE = "db_query_commands"
-    

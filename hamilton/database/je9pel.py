@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import requests
 
-from hamilton.database.config import Config
+from hamilton.database.config import DBUpdateConfig
 
 # Debugging
 # pd.set_option("display.max_rows", 500)
@@ -19,7 +19,7 @@ from hamilton.database.config import Config
 
 
 class JE9PELGenerator:
-    def __init__(self, config, logger=None):
+    def __init__(self, config: DBUpdateConfig, logger=None):
         self.config = config
         self.cache_dir = Path(__file__).parent / "cache"
         if logger:
@@ -278,5 +278,5 @@ class JE9PELGenerator:
 
 
 if __name__ == "__main__":
-    generator = JE9PELGenerator(Config)
+    generator = JE9PELGenerator(DBUpdateConfig)
     generator.generate_db(use_cache=False)
