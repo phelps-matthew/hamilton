@@ -57,7 +57,7 @@ class SDRSigMFRecord:
 
     def set_lna(self, state: Literal["on", "off"] = "off"):
         """Switch appropriate power relay based on value of self.freq and state"""
-        if self.config.VHF_LOW <= self.freq <= self.config.VHF_HIGH:
+        if self.freq <= self.config.VHF_HIGH:
             command = "set"
             parameters = {"id": "vhf_bias", "state": state}
         else:
@@ -77,10 +77,7 @@ class SDRSigMFRecord:
                 setter_method = getattr(self, setter_method_name)
                 setter_method(value)
                 self.log.info(f"Applied {setter_method_name} with value {value}")
-        if self.config.VHF_LOW <= self.freq <= self.config.VHF_HIGH:
-            self.band = "VHF"
-        else:
-            self.band = "UHF"
+        self.band = "VHF" if self.freq <= self.config.VHF_HIGH else "UHF"
         self.ch0_antenna = "TX/RX" if self.band == "VHF" else "RX2"
 
     def initialize_flowgraph(self):
@@ -106,7 +103,7 @@ class SDRSigMFRecord:
             self.log.info("Flowgraph started")
             return True
         except Exception as e:
-            self.log.info(f"Error starting recording: {e}")
+            self.log.warning(f"Error starting recording: {e}")
             return False
 
     def stop_record(self):
@@ -118,5 +115,5 @@ class SDRSigMFRecord:
             self.set_lna("off")
             return True
         except Exception as e:
-            self.log.info(f"Error stopping recording: {e}")
+            self.log.warning(f"Error stopping recording: {e}")
             return False

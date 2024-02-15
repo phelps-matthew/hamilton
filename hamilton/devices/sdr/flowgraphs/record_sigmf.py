@@ -62,7 +62,6 @@ class SigMFRecordFlowgraph(gr.top_block):
             self.log.addHandler(handler)
         self.log.setLevel(logging.DEBUG)
 
-
         self.log.info(f"SAMP RATE: {self.samp_rate}")
         self.log.info(f"TARGET SAMP RATE: {self.target_samp_rate}")
         self.log.info(f"RX_FREQ: {self.rx_freq}")
