@@ -16,10 +16,10 @@ class SDRController(BaseController):
 
         if command == "start_record":
             self.flowgraph.update_parameters(parameters)
-            self.flowgraph.start_record()
+            response = self.flowgraph.start_record()
 
         elif command == "stop_record":
-            self.flowgraph.stop_record()
+            response = self.flowgraph.stop_record()
 
         return response
 

@@ -22,6 +22,7 @@ from gnuradio import uhd
 import time
 import gr_sigmf
 import threading
+import logging
 
 
 class SigMFRecordFlowgraph(gr.top_block):
@@ -55,13 +56,20 @@ class SigMFRecordFlowgraph(gr.top_block):
         ##################################################
         # Log the initializtion arguments (MP)
         ##################################################
-        print(f"SAMP RATE: {self.samp_rate}")
-        print(f"TARGET SAMP RATE: {self.target_samp_rate}")
-        print(f"RX_FREQ: {self.rx_freq}")
-        print(f"RX_GAIN: {self.rx_gain}")
-        print(f"SAT_ID: {self.sat_id}")
-        print(f"CH0_ANTENNA: {self.ch0_antenna}")
-        print(f"FILENAME: {self.filename}")
+        self.log = logging.getLogger(self.__class__.__name__)
+        if not self.log.handlers:
+            handler = logging.StreamHandler()
+            self.log.addHandler(handler)
+        self.log.setLevel(logging.DEBUG)
+
+
+        self.log.info(f"SAMP RATE: {self.samp_rate}")
+        self.log.info(f"TARGET SAMP RATE: {self.target_samp_rate}")
+        self.log.info(f"RX_FREQ: {self.rx_freq}")
+        self.log.info(f"RX_GAIN: {self.rx_gain}")
+        self.log.info(f"SAT_ID: {self.sat_id}")
+        self.log.info(f"CH0_ANTENNA: {self.ch0_antenna}")
+        self.log.info(f"FILENAME: {self.filename}")
 
 
         ##################################################

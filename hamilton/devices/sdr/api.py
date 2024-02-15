@@ -9,6 +9,7 @@ from hamilton.devices.sdr.config import Config
 from hamilton.devices.sdr.flowgraphs.record_sigmf import SigMFRecordFlowgraph
 from hamilton.devices.relay.client import RelayClient
 from pathlib import Path
+import logging
 
 
 class SDRSigMFRecord:
@@ -28,6 +29,13 @@ class SDRSigMFRecord:
         self.sat_id = "norad-id"
         self.band = "UHF"
         self.ch0_antenna = "RX2"
+
+        # Setup logger (needed for journalctl)
+        self.log = logging.getLogger(self.__class__.__name__)
+        if not self.log.handlers:
+            handler = logging.StreamHandler()
+            self.log.addHandler(handler)
+        self.log.setLevel(logging.DEBUG)
 
     def set_freq(self, freq):
         self.freq = freq
@@ -56,19 +64,19 @@ class SDRSigMFRecord:
             command = "set"
             parameters = {"id": "uhf_bias", "state": state}
         response = self.relay.send_command(command, parameters)
-        print(f"Relay id {parameters['id']} set to state {parameters['state']}")
+        self.log.info(f"Relay id {parameters['id']} set to state {parameters['state']}")
 
         return response
 
     def update_parameters(self, params: dict):
         """Called by external service"""
-        print("Updating flowgraph attributes")
+        self.log.info("Updating flowgraph attributes")
         for param_name, value in params.items():
             setter_method_name = f"set_{param_name}"
             if hasattr(self, setter_method_name):
                 setter_method = getattr(self, setter_method_name)
                 setter_method(value)
-                print(f"Applied {setter_method_name} with value {value}")
+                self.log.info(f"Applied {setter_method_name} with value {value}")
         if self.config.VHF_LOW <= self.freq <= self.config.VHF_HIGH:
             self.band = "VHF"
         else:
@@ -77,7 +85,7 @@ class SDRSigMFRecord:
 
     def initialize_flowgraph(self):
         """Update params within flowgraph"""
-        print("Intializing flowgraph")
+        self.log.info("Intializing flowgraph")
         self.set_filename()
         params = {
             "target_samp_rate": self.sample_rate,
@@ -91,14 +99,24 @@ class SDRSigMFRecord:
 
     def start_record(self):
         """Activate LNA and start SigMF flowgraph recording"""
-        self.initialize_flowgraph()
-        self.set_lna("on")
-        self.flowgraph.start()
-        print("Flowgraph started")
+        try:
+            self.initialize_flowgraph()
+            self.set_lna("on")
+            self.flowgraph.start()
+            self.log.info("Flowgraph started")
+            return True
+        except Exception as e:
+            self.log.info(f"Error starting recording: {e}")
+            return False
 
     def stop_record(self):
         """Stop SigMF flowgraph recording and deactivate LNA"""
-        self.flowgraph.stop()
-        self.flowgraph.wait()  # Waits for all processing to stop
-        print("Flowgraph stopped")
-        self.set_lna("off")
+        try:
+            self.flowgraph.stop()
+            self.flowgraph.wait()  # Waits for all processing to stop
+            self.log.info("Flowgraph stopped")
+            self.set_lna("off")
+            return True
+        except Exception as e:
+            self.log.info(f"Error stopping recording: {e}")
+            return False
