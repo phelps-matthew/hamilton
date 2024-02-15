@@ -8,21 +8,26 @@ from datetime import datetime
 from hamilton.devices.sdr.config import Config
 from hamilton.devices.sdr.flowgraphs.record_sigmf import SigMFRecordFlowgraph
 from hamilton.devices.relay.client import RelayClient
+from pathlib import Path
 
 
 class SDRSigMFRecord:
-    def __init__(self, config: Config, relay_client: RelayClient, flowgraph: SigMFRecordFlowgraph):
+    def __init__(self, config: Config, relay_client: RelayClient):
         self.config = config
         self.relay = relay_client
-        self.flowgraph = flowgraph
+        self.flowgraph = None
+
+        obs_dir = Path(__file__).parent.parent.parent / "observations"
+        self.obs_dir = obs_dir.absolute()
 
         # Default Values
         self.filename = None
         self.freq = 425e6
         self.sample_rate = 50e3
         self.rx_gain = 40
-        self.sat_id = "sample_norad_id"
+        self.sat_id = "norad-id"
         self.band = "UHF"
+        self.ch0_antenna = "RX2"
 
     def set_freq(self, freq):
         self.freq = freq
@@ -34,13 +39,13 @@ class SDRSigMFRecord:
         self.rx_gain = rx_gain
 
     def set_sat_id(self, sat_id: str):
-        self.sat = sat_id
+        self.sat_id = sat_id
 
     def set_filename(self):
         """Set unique filename for SigMF recording."""
         current_time = datetime.utcnow()
         formatted_time = current_time.strftime("%Y%m%d_%H%M%S")
-        self.filename = f"record_{self.sat_id}_{self.band}_{formatted_time}"
+        self.filename = str(self.obs_dir) + f"/{self.sat_id}_{self.band}_{formatted_time}"
 
     def set_lna(self, state: Literal["on", "off"] = "off"):
         """Switch appropriate power relay based on value of self.freq and state"""
@@ -63,21 +68,26 @@ class SDRSigMFRecord:
             if hasattr(self, setter_method_name):
                 setter_method = getattr(self, setter_method_name)
                 setter_method(value)
+                print(f"Applied {setter_method_name} with value {value}")
         if self.config.VHF_LOW <= self.freq <= self.config.VHF_HIGH:
             self.band = "VHF"
         else:
             self.band = "UHF"
+        self.ch0_antenna = "TX/RX" if self.band == "VHF" else "RX2"
 
     def initialize_flowgraph(self):
         """Update params within flowgraph"""
         print("Intializing flowgraph")
-        ch0_antenna = "TX/RX" if self.band == "VHF" else "RX2"
-        self.flowgraph.set_ch0_antenna(ch0_antenna)
-        self.flowgraph.set_rx_freq(self.freq)
-        self.flowgraph.set_target_samp_rate(self.sample_rate)
-        self.flowgraph.set_rx_gain(self.rx_gain)
         self.set_filename()
-        self.flowgraph.set_filename(self.filename)
+        params = {
+            "target_samp_rate": self.sample_rate,
+            "rx_freq": self.freq,
+            "rx_gain": self.rx_gain,
+            "sat_id": self.sat_id,
+            "ch0_antenna": self.ch0_antenna,
+            "filename": self.filename,
+        }
+        self.flowgraph = SigMFRecordFlowgraph(**params)
 
     def start_record(self):
         """Activate LNA and start SigMF flowgraph recording"""

@@ -26,7 +26,6 @@ class SDRController(BaseController):
 
 if __name__ == "__main__":
     relay_client = RelayClient()
-    flowgraph = SigMFRecordFlowgraph()
-    recorder = SDRSigMFRecord(config=Config, relay_client=relay_client, flowgraph=flowgraph)
+    recorder = SDRSigMFRecord(config=Config, relay_client=relay_client)
     controller = SDRController(config=Config, recorder=recorder)
     controller.start()

@@ -26,7 +26,16 @@ import threading
 
 class SigMFRecordFlowgraph(gr.top_block):
 
-    def __init__(self):
+    def __init__(
+        self,
+        samp_rate=100e3,
+        target_samp_rate=50e3,
+        rx_freq=425e6,
+        rx_gain=40,
+        sat_id="flowgraph_default_sat_id",
+        ch0_antenna="RX2",
+        filename="flowgraph_sample_filename"
+    ):
         gr.top_block.__init__(self, "SigMFRecording", catch_exceptions=True)
 
         self._lock = threading.RLock()
@@ -34,13 +43,26 @@ class SigMFRecordFlowgraph(gr.top_block):
         ##################################################
         # Variables
         ##################################################
-        self.target_samp_rate = target_samp_rate = 50e3
-        self.sat_id = sat_id = "25397"
-        self.samp_rate = samp_rate = 100e3
-        self.rx_gain = rx_gain = 40
-        self.rx_freq = rx_freq = 425e6
-        self.filename = filename = "sample_filename"
-        self.ch0_antenna = ch0_antenna = "RX2"
+        self.samp_rate = samp_rate
+        self.target_samp_rate = target_samp_rate
+        self.rx_freq = rx_freq
+        self.rx_gain = rx_gain
+        self.sat_id = sat_id
+        self.ch0_antenna = ch0_antenna
+        self.filename = filename
+
+
+        ##################################################
+        # Log the initializtion arguments (MP)
+        ##################################################
+        print(f"SAMP RATE: {self.samp_rate}")
+        print(f"TARGET SAMP RATE: {self.target_samp_rate}")
+        print(f"RX_FREQ: {self.rx_freq}")
+        print(f"RX_GAIN: {self.rx_gain}")
+        print(f"SAT_ID: {self.sat_id}")
+        print(f"CH0_ANTENNA: {self.ch0_antenna}")
+        print(f"FILENAME: {self.filename}")
+
 
         ##################################################
         # Blocks
@@ -69,13 +91,13 @@ class SigMFRecordFlowgraph(gr.top_block):
         self.uhd_usrp_source_0.set_gain(rx_gain, 0)
         self.sigmf_usrp_gps_message_source_0 = gr_sigmf.usrp_gps_message_source("", 1)
         self.sigmf_sink_0 = gr_sigmf.sink("cf32", self.filename, gr_sigmf.sigmf_time_mode_relative, False)
-        self.sigmf_sink_0.set_global_meta("core:sample_rate", target_samp_rate)
+        self.sigmf_sink_0.set_global_meta("core:sample_rate", self.target_samp_rate)
         self.sigmf_sink_0.set_global_meta("core:description", sat_id)
         self.sigmf_sink_0.set_global_meta("core:author", "Matthew Phelps")
         self.sigmf_sink_0.set_global_meta("core:license", "")
         self.sigmf_sink_0.set_global_meta("core:hw", "crossed-yagi_PGA-103+_B200")
 
-        self.sigmf_sink_0.set_global_meta("mysat_id", sat_id)
+        # self.sigmf_sink_0.set_global_meta("mysat_id", sat_id)
         self.rational_resampler_xxx_0 = filter.rational_resampler_ccc(
             interpolation=int(target_samp_rate), decimation=int(samp_rate), taps=[], fractional_bw=0
         )

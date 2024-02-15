@@ -3,7 +3,7 @@ from hamilton.devices.relay.config import Config
 
 
 class RelayClient(BaseClient):
-    def __init__(self, config: Config):
+    def __init__(self, config: Config = Config()):
         super().__init__(config)
         self.config = config
 
