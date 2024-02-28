@@ -36,6 +36,9 @@ for exchange in routing_manifest["exchanges"]:
                 label=f"{routing_key} {rpc_label}",
                 style="dashed" if publishing["rpc"] else "solid",
             )
+# Apply graph attributes for layout control
+graph.graph_attr["ratio"] = "compress"  # Adjust as needed
+graph.graph_attr["size"] = "8,11!"  # Adjust as needed
 
 # Layout and render the graph
 layouts = ["neato", "fdp", "sfdp", "twopi", "circo", "dot"]
