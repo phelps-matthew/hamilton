@@ -38,7 +38,9 @@ for exchange in routing_manifest["exchanges"]:
             )
 
 # Layout and render the graph
-graph.layout(prog="dot")
-graph.draw("routing_topology.png", format="png")
+layouts = ["neato", "fdp", "sfdp", "twopi", "circo", "dot"]
+for layout in layouts:
+    graph.layout(prog=layout)
+    graph.draw(f"routing_topology_{layout}.png", format="png")
 
-print("Graph has been generated and saved as 'routing_topology.png'")
+    print(f"Graph has been generated and saved as 'routing_topology_{layout}.png'")
