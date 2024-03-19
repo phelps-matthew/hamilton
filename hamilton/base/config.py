@@ -1,57 +1,40 @@
-class Config:
-    rabbitmq_server = "localhost"
-    db_command_queue = "db_query_commands"
+from dataclasses import dataclass, field
 
-    VHF_LOW = 130e6
-    VHF_HIGH = 150e6
-    UHF_LOW = 410e6
-    UHF_HIGH = 440e6
+
+@dataclass
+class Binding:
+    exchange: str = "base_exchange"
+    routing_keys: list = field(default_factory=lambda: ["base.routing.key.*"])
+
+
+@dataclass
+class Publishing:
+    exchange: str = "base_exchange"
+    rpc: bool = True
+    routing_keys: list = field(default_factory=lambda: ["base.routing.key.example"])
+
+
+@dataclass
+class Exchange:
+    name: str = "base_name"
+    type: str = "topic"
+    durable: bool = True
+    auto_delete: bool = False
+
+
+class Config:
+    rabbitmq_server: str = "localhost"
+    message_version: str = "1.0.0"
+    db_command_queue: str = "db_query_commands"
+    VHF_LOW: float = 130e6
+    VHF_HIGH: float = 150e6
+    UHF_LOW: float = 410e6
+    UHF_HIGH: float = 440e6
 
 
 class MessageNodeConfig(Config):
-    name = "BaseService"
-    exchanges = []
-    bindings = []
-    publishings = []
-
-
-class ControllerConfig(MessageNodeConfig):
-    pass
-
-
-class ClientConfig(MessageNodeConfig):
-    pass
-
-
-class Binding:
-    exchange = "base_exchange"
-    routing_keys = ["base.routing.key.*"]
-
-
-class Publishing:
-    exchange = "base_exchange"
-    rpc = True
-    routing_keys = ["base.routing.key.example"]
-
-
-class Exchange:
-    name = "base_name"
-    type = "topic"
-    durable = True
-    auto_delete = False
-
-
-# Example
-
-
-class MountControllerConfig(ControllerConfig):
-    node_name = "MountController"
-    exchanges = [
-        Exchange(name="mount", type="topic", durable=True, auto_delete=False),
-    ]
-    bindings = [
-        Binding(exchange="mount", routing_keys=["observatory.device.mount.command.*"]),
-    ]
-    publishings = [
-        Publishing(exchange="mount", rpc=False, routing_keys=["observatory.device.mount.telemetry.azel"]),
-    ]
+    name: str = "BaseService"
+    exchanges: list[Exchange] = []
+    bindings: list[Binding] = []
+    publishings: list[Publishing] = []
+    daemon: bool = True

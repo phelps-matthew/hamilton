@@ -3,39 +3,36 @@
     "properties": {
       "messageType": {
         "type": "string",
-        "enum": ["command"],
-        "description": "Indicates that this is a command message."
+        "enum": ["telemetry"],
+        "description": "Indicates that this is a telemetry message."
       },
       "timestamp": {
         "type": "string",
         "format": "date-time",
-        "description": "Timestamp of when the command was issued."
+        "description": "Timestamp of when the telemetry was sent."
       },
       "source": {
         "type": "string",
-        "description": "Identifier for the source of the command."
+        "description": "Identifier for the source of the telemetry."
       },
       "version": {
         "type": "string",
-        "description": "Version of the command message format."
+        "description": "Version of the telemetry message format."
       },
       "payload": {
         "type": "object",
         "properties": {
-          "commandType": {
+          "telemetryType": {
             "type": "string",
-            "description": "Type of command to be executed."
+            "description": "Type of telemetry messaged."
           },
           "parameters": {
             "type": "object",
-            "description": "Parameters relevant to the command.",
-            "properties": {
-              // Define specific parameters here
-            },
-            "additionalProperties": false
+            "description": "Parameters relevant to the telemetry. Can be an arbitrary dictionary.",
+            "additionalProperties": true
           }
         },
-        "required": ["commandType", "parameters"],
+        "required": ["telemetryType", "parameters"],
         "additionalProperties": false
       }
     },

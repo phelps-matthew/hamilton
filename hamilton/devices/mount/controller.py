@@ -1,17 +1,27 @@
-from hamilton.base.message_node import MessageNode, MessageHandler
+import json
+import signal
+
+import pika
+from pika.channel import Channel
+from pika.spec import Basic
+
+from hamilton.base.message_node import MessageHandler, MessageNode
+from hamilton.common.utils import CustomJSONDecoder
 from hamilton.devices.mount.api import ROT2Prog
 from hamilton.devices.mount.config import MountControllerConfig
-from hamilton.common.utils import CustomJSONDecoder
-import threading
-import json
+
+
+def sigint_handler(signum, frame):
+    print("SIGINT received, shutting down gracefully...")
+    controller.node.stop()
 
 
 class MountCommandHandler(MessageHandler):
     def __init__(self, mount_driver: ROT2Prog):
         super().__init__(message_type="command")
-        self.mount = mount_driver
+        self.mount: ROT2Prog = mount_driver
 
-    def handle_message(self, ch, method, properties, body):
+    def handle_message(self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes) -> Any:
         response = None
         message = json.loads(body, cls=CustomJSONDecoder)
         corr_id = properties.correlation_id
@@ -36,8 +46,8 @@ class MountCommandHandler(MessageHandler):
 
 
 class MountController:
-    def __init__(self, config, handlers: list[MessageHandler]):
-        self.node = MessageNode(config, handlers)
+    def __init__(self, config: MountControllerConfig, handlers: list[MessageHandler]):
+        self.node: MessageNode = MessageNode(config, handlers)
 
 
 if __name__ == "__main__":
@@ -46,8 +56,8 @@ if __name__ == "__main__":
     handlers = [MountCommandHandler(mount_driver)]
     controller = MountController(config, handlers)
 
+    # Register the SIGINT handler. Allows graceful shutdown on keyboard interrupt
+    signal.signal(signal.SIGINT, sigint_handler)
+
+    # Will stay up indefinitely as producer and consumer threads are non-daemon and keep the process alive
     controller.node.start()
-    import time
-    time.sleep(5)
-    # Blocks the main thread indefinitely until a SIGINT or SIGTERM is received.
-    # threading.Event().wait()
