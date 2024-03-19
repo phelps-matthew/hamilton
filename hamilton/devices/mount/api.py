@@ -257,7 +257,7 @@ class ROT2Prog:
         with self._limits_lock:
             return (self._min_az, self._max_az, self._min_el, self._max_el)
 
-    def set_limits(self, min_az=0, max_az=360, min_el=0, max_el=180):
+    def set_limits(self, min_az=0, max_az=360, min_el=10, max_el=170):
         """Sets the minimum and maximum limits for azimuth and elevation.
 
         Args:
