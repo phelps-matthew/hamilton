@@ -37,4 +37,10 @@ class MessageNodeConfig(Config):
     exchanges: list[Exchange] = []
     bindings: list[Binding] = []
     publishings: list[Publishing] = []
-    daemon: bool = True
+
+
+class LogConfig(MessageNodeConfig):
+    name: str = "LogService"
+    root_log_dir: str = "~/hamilton/log/"
+    max_log_size: int = 10 * 1024 * 1024  # 10 MB
+    backup_count: int = 3

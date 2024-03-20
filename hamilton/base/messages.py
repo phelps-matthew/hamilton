@@ -1,5 +1,20 @@
 from typing import TypedDict, Union, Dict
-from datetime import datetime
+from datetime import datetime, UTC
+from enum import Enum
+
+
+class MessageType(Enum):
+    COMMAND = "command"
+    TELEMETRY = "telemetry"
+    RESPONSE = "response"
+
+
+class MessageHandlerType(Enum):
+    COMMAND = "command"
+    TELEMETRY = "telemetry"
+    RESPONSE = "response"
+    ALL = "all"
+
 
 CommandPayload = TypedDict("CommandPayload", {"commandType": str, "parameters": Dict[str, Union[str, int, float]]})
 TelemetryPayload = TypedDict(
@@ -10,7 +25,7 @@ ResponsePayload = TypedDict("ResponsePayload", {"responseType": str, "data": Dic
 Payload = Union[CommandPayload, TelemetryPayload, ResponsePayload]
 
 Message = TypedDict(
-    "Message", {"messageType": str, "timestamp": str, "source": str, "version": str, "payload": Payload}
+    "Message", {"messageType": MessageType, "timestamp": str, "source": str, "version": str, "payload": Payload}
 )
 
 
@@ -20,9 +35,9 @@ class MessageGenerator:
         self.version = version
 
     def _get_timestamp(self) -> str:
-        return datetime.utcnow().isoformat()
+        return datetime.now(UTC).isoformat()
 
-    def generate_message(self, message_type: str, payload: Payload) -> Message:
+    def generate_message(self, message_type: MessageType, payload: Payload) -> Message:
         message_schema: Message = {
             "messageType": message_type,
             "timestamp": self._get_timestamp(),

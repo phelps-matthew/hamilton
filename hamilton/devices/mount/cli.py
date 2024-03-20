@@ -1,24 +1,46 @@
 #!/home/mgp/miniforge3/envs/gr39/bin/python
 
-from hamilton.base.client import BaseClient
-from hamilton.devices.mount.config import Config
+
+import argparse
+import json
+import time
+from typing import Any
+
+import pika
+from pika.channel import Channel
+from pika.spec import Basic
+
+from hamilton.base.message_node import MessageHandler, MessageNode
+from hamilton.base.messages import MessageHandlerType
+from hamilton.common.utils import CustomJSONDecoder, CustomJSONEncoder
+from hamilton.devices.mount.config import MountClientConfig
 
 
-class MountClient(BaseClient):
-    def __init__(self, config: Config):
-        super().__init__(config)
-        self.config = config
+class MountTelemetryHandler(MessageHandler):
+    def __init__(self):
+        super().__init__(MessageHandlerType.TELEMETRY)
+
+    def handle_message(self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes) -> Any:
+        message = json.loads(body, cls=CustomJSONDecoder)
+        return message["payload"]["parameters"]
+
+
+class MountClient:
+    def __init__(self, config, handlers: list[MessageHandler]):
+        self.node = MessageNode(config, handlers)
 
 
 if __name__ == "__main__":
-    import argparse
+    config = MountClientConfig()
+    config.name = "MountCLIClient"
+    handlers = [MountTelemetryHandler()]
+    client = MountClient(config, handlers)
 
-    client = MountClient(config=Config)
+    # Setup argparser
     parser = argparse.ArgumentParser(
         description="Control the mount system using various commands",
         formatter_class=argparse.RawTextHelpFormatter,
     )
-
     subparsers = parser.add_subparsers(dest="command", title="Commands", metavar="<command>")
 
     # Subparser for the 'set' command
@@ -34,13 +56,22 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Map CLI commands to MountClient's send_command method
-    if args.command:
-        if args.command == "set":
-            response = client.send_command("set", {"azimuth": args.azimuth, "elevation": args.elevation})
-        elif args.command == "status":
-            response = client.send_command("status")
-        elif args.command == "stop":
-            response = client.send_command("stop")
+    try:
+        client.node.start()
+        if args.command:
+            command = args.command
+            params = {}
+            message = client.node.msg_generator.generate_command(command, params)
+            if args.command == "set":
+                params = {"azimuth": args.azimuth, "elevation": args.elevation}
+                message = client.node.msg_generator.generate_command(command, params)
+                response = client.node.publish_rpc_message("observatory.device.mount.command.set", message)
+            elif args.command == "status":
+                response = client.node.publish_rpc_message("observatory.device.mount.command.status", message)
+            elif args.command == "stop":
+                response = client.node.publish_rpc_message("observatory.device.mount.command.stop", message)
 
-        print("Response:", response)
+            print("Response:", response)
+
+    finally:
+        client.node.stop()

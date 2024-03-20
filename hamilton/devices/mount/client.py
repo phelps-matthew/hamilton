@@ -7,18 +7,18 @@ from pika.channel import Channel
 from pika.spec import Basic
 
 from hamilton.base.message_node import MessageHandler, MessageNode
+from hamilton.base.messages import MessageHandlerType
 from hamilton.common.utils import CustomJSONDecoder
 from hamilton.devices.mount.config import MountClientConfig
 
 
 class MountTelemetryHandler(MessageHandler):
     def __init__(self):
-        super().__init__("telemetry")
+        super().__init__(MessageHandlerType.TELEMETRY)
 
     def handle_message(self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes) -> Any:
         message = json.loads(body, cls=CustomJSONDecoder)
         payload = message["payload"]
-        print(f"Telemetry Received. payload: {payload}")
         return message
 
 
@@ -38,13 +38,9 @@ if __name__ == "__main__":
         parameters = {}
         message = client.node.msg_generator.generate_command(command, parameters)
         response = client.node.publish_message("observatory.device.mount.command.status", message)
-        print("-" * 10)
         print(response)
-        print("-" * 10)
         response = client.node.publish_rpc_message("observatory.device.mount.command.status", message)
-        print("x" * 10)
         print(response)
-        print("x" * 10)
 
     finally:
         client.node.stop()

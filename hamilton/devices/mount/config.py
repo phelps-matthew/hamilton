@@ -14,7 +14,6 @@ class MountControllerConfig(MessageNodeConfig):
     ]
 
     DEVICE_ADDRESS = "/dev/usbttymd01"
-    daemon = False
 
 
 class MountClientConfig(MessageNodeConfig):

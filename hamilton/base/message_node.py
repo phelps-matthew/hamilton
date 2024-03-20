@@ -8,6 +8,7 @@ the message properties.
 import json
 import logging
 import queue
+import signal
 import threading
 from typing import Union, Optional, Any
 import uuid
@@ -18,12 +19,17 @@ from pika.channel import Channel
 from pika.spec import Basic
 
 from hamilton.base.config import MessageNodeConfig, Publishing
-from hamilton.base.message_generate import MessageGenerator, Message
+from hamilton.base.messages import MessageGenerator, Message, MessageType, MessageHandlerType
 from hamilton.common.utils import CustomJSONDecoder, CustomJSONEncoder
 
 # Setup basic logging and create a named logger for the this module
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger("message_node")
+logger.propagate = False  # Prevent logging from propagating to the root logger
+
+# Adjust the logging level for pika
+pika_logger = logging.getLogger("pika")
+pika_logger.setLevel(logging.WARNING)
 
 
 # Surfaces what methods are available to classes that interface with MessageNode instances
@@ -44,9 +50,10 @@ class IMessageNodeOperations(ABC):
         pass
 
 
+# TODO: Configure default message handler for RPC responses based on `serve_as_rpc` arg
 class MessageHandler(ABC):
-    def __init__(self, message_type: str = "", serve_as_rpc: bool = False):
-        self.message_type: str = message_type
+    def __init__(self, message_type: MessageHandlerType = MessageHandlerType.ALL, serve_as_rpc: bool = False):
+        self.message_type: MessageHandlerType = message_type
         self.node_operations: IMessageNodeOperations = None
 
     def set_node_operations(self, node_operations: IMessageNodeOperations) -> None:
@@ -65,7 +72,7 @@ class Consumer(threading.Thread):
         self.shutdown_event: threading.Event = threading.Event()
         self.responses: dict[str, Union[threading.Event, Any]] = {}
         self.responses_lock: threading.Lock = threading.Lock()
-        self.handlers_map: dict[str, MessageHandler] = self.build_handlers_map(handlers)
+        self.handlers_map: dict[MessageHandlerType, list[MessageHandler]] = self.build_handlers_map(handlers)
         self.connection: pika.BlockingConnection = None
         self.channel: Channel = None
 
@@ -90,8 +97,8 @@ class Consumer(threading.Thread):
         self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes
     ) -> None:
         message = json.loads(body, cls=CustomJSONDecoder)
-        message_type = message.get("messageType")
-        logger.info(f"Receieved message of type {message_type} and body {message}")
+        message_type = MessageHandlerType(message.get("messageType"))
+        logger.debug(f"Receieved message of type {message_type} and body {message}")
 
         # Extract and handle the correlation_id for RPC responses
         corr_id = properties.correlation_id
@@ -144,11 +151,19 @@ class Consumer(threading.Thread):
             except Exception as e:
                 logger.error(f"Failed to setup bindings for queue '{queue_name}': {e}")
 
-    def build_handlers_map(self, handlers: list[MessageHandler]) -> dict[str, MessageHandler]:
+    def build_handlers_map(self, handlers: list[MessageHandler]) -> dict[MessageHandlerType, list[MessageHandler]]:
         """Organizes handlers by message type, allowing multiple handlers per type."""
         handler_map = {}
         for handler in handlers:
-            handler_map.setdefault(handler.message_type, []).append(handler)
+            # If the handler is for 'all' message types, add it to all types except 'ALL'
+            if handler.message_type == MessageHandlerType.ALL:
+                for message_type in MessageHandlerType:
+                    if message_type != MessageHandlerType.ALL:
+                        handler_map.setdefault(message_type, []).append(handler)
+            else:
+                # Add handler to its specific message type
+                handler_map.setdefault(handler.message_type, []).append(handler)
+
         return handler_map
 
     def get_event_response(self, corr_id: str) -> dict[str, Union[threading.Event, Any]]:
@@ -203,7 +218,7 @@ class Publisher(threading.Thread):
                     properties=properties,
                     body=body,
                 )
-                logger.info(f"Message published to exchange '{exchange}' with routing key '{routing_key}'.")
+                logger.debug(f"Message published to exchange '{exchange}' with routing key '{routing_key}'.")
             except Exception as e:
                 logger.error(
                     f"Failed to publish message to exchange '{exchange}' with routing key '{routing_key}': {e}"
@@ -251,14 +266,26 @@ class Publisher(threading.Thread):
 
 class MessageNode(IMessageNodeOperations):
 
-    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler] = []):
+    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler] = [], verbosity: int = 0):
         self.config: MessageNodeConfig = config
         self._msg_generator: MessageGenerator = MessageGenerator(config.name, config.message_version)
+
         # Link MessageNode to handlers' node operations interface
         for handler in handlers:
             handler.set_node_operations(self)
+
         self.consumer: Consumer = Consumer(config, handlers)
         self.publisher: Publisher = Publisher(config)
+
+        if verbosity > 0:
+            logger.setLevel(logging.INFO)
+            logger.propagate = True
+        if verbosity > 1:
+            pika_logger.setLevel(logging.INFO)
+        if verbosity > 2:
+            logger.setLevel(logging.DEBUG)
+        if verbosity > 3:
+            pika_logger.setLevel(logging.DEBUG)
 
     # Required form for IMessageNodeOperations
     @property
@@ -270,8 +297,14 @@ class MessageNode(IMessageNodeOperations):
     def msg_generator(self, value: MessageGenerator) -> None:
         self._msg_generator = value
 
+    def signal_handler(self, signum, frame):
+        logging.info("SIGINT received, initiating shutdown...")
+        self.stop()
+
     def start(self) -> None:
-        """Intialize MessageNode, starting consumer and producer threads."""
+        """Intialize MessageNode and signal handler, and start consumer and producer threads."""
+        signal.signal(signal.SIGINT, self.signal_handler)
+        signal.signal(signal.SIGTERM, self.signal_handler)
         logger.info(f"Starting {self.config.name}...")
         logger.info(f"Starting Consumer..")
         self.consumer.start()
