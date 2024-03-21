@@ -7,19 +7,18 @@ the message properties.
 
 import json
 import logging
-import queue
 import signal
 import threading
-from typing import Union, Optional, Any
 import uuid
 from abc import ABC, abstractmethod
+from typing import Any, Callable, Optional, Union
 
 import pika
 from pika.channel import Channel
 from pika.spec import Basic
 
 from hamilton.base.config import MessageNodeConfig, Publishing
-from hamilton.base.messages import MessageGenerator, Message, MessageType, MessageHandlerType
+from hamilton.base.messages import Message, MessageGenerator, MessageHandlerType
 from hamilton.common.utils import CustomJSONDecoder, CustomJSONEncoder
 
 # Setup basic logging and create a named logger for the this module
@@ -55,6 +54,7 @@ class MessageHandler(ABC):
     def __init__(self, message_type: MessageHandlerType = MessageHandlerType.ALL, serve_as_rpc: bool = False):
         self.message_type: MessageHandlerType = message_type
         self.node_operations: IMessageNodeOperations = None
+        self.shutdown_hooks: list[Callable[[], None]] = []
 
     def set_node_operations(self, node_operations: IMessageNodeOperations) -> None:
         self.node_operations = node_operations
@@ -70,30 +70,24 @@ class Consumer(threading.Thread):
         super().__init__()
         self.config: MessageNodeConfig = config
         self.shutdown_event: threading.Event = threading.Event()
+        self.ready_event: threading.Event = threading.Event()
         self.responses: dict[str, Union[threading.Event, Any]] = {}
         self.responses_lock: threading.Lock = threading.Lock()
-        self.handlers_map: dict[MessageHandlerType, list[MessageHandler]] = self.build_handlers_map(handlers)
+        self.handlers_map: dict[MessageHandlerType, list[MessageHandler]] = self._build_handlers_map(handlers)
         self.connection: pika.BlockingConnection = None
         self.channel: Channel = None
 
     def run(self) -> None:
         try:
-            self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.config.rabbitmq_server))
-            self.channel = self.connection.channel()
-            self.declare_exchanges()
-            self.setup_bindings()
-
+            self._connect()
             while not self.shutdown_event.is_set():
                 self.connection.process_data_events(time_limit=0)  # Check for shutdown flag
 
         except Exception as e:
             logger.error(f"An error occurred in the Consumer: {e}")
+        self._cleanup()
 
-        self.channel.stop_consuming()
-        self.channel.close()
-        self.connection.close()
-
-    def on_message_received(
+    def _on_message_received(
         self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes
     ) -> None:
         message = json.loads(body, cls=CustomJSONDecoder)
@@ -121,7 +115,31 @@ class Consumer(threading.Thread):
         else:
             logger.warning(f"No handlers found for message type: {message_type}")
 
-    def declare_exchanges(self) -> None:
+    def _connect(self):
+        """Establishes the RabbitMQ connection and channel, and declares exchanges."""
+        try:
+            logger.info("Establishing Consumer connection")
+            self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.config.rabbitmq_server))
+            self.channel = self.connection.channel()
+            self._declare_exchanges()
+            self._setup_bindings()
+            logger.info(
+                f"Consumer connection established: connection: {self.connection.is_open}, channel: {self.channel.is_open}"
+            )
+            if not self.ready_event.is_set():
+                self.ready_event.set()
+        except Exception as e:
+            logging.error(f"Failed to establish connection or channel: {e}")
+
+    def _cleanup(self) -> None:
+        if self.channel:
+            self.channel.stop_consuming()
+            if self.channel.is_open:
+                self.channel.close()
+        if self.connection and self.connection.is_open:
+            self.connection.close()
+
+    def _declare_exchanges(self) -> None:
         for exchange in self.config.exchanges:
             try:
                 if self.channel:
@@ -135,7 +153,7 @@ class Consumer(threading.Thread):
             except Exception as e:
                 logger.error(f"Failed to declare exchange '{exchange.name}': {e}")
 
-    def setup_bindings(self) -> None:
+    def _setup_bindings(self) -> None:
         for binding in self.config.bindings:
             queue_name = f"{binding.exchange}_{self.config.name}"
             try:
@@ -143,7 +161,7 @@ class Consumer(threading.Thread):
                 for routing_key in binding.routing_keys:
                     self.channel.queue_bind(exchange=binding.exchange, queue=queue_name, routing_key=routing_key)
                 consumer_tag = self.channel.basic_consume(
-                    queue=queue_name, on_message_callback=self.on_message_received, auto_ack=True
+                    queue=queue_name, on_message_callback=self._on_message_received, auto_ack=True
                 )
                 logger.info(
                     f"Bindings for queue '{queue_name}' with consumer tag '{consumer_tag}' configured successfully."
@@ -151,7 +169,7 @@ class Consumer(threading.Thread):
             except Exception as e:
                 logger.error(f"Failed to setup bindings for queue '{queue_name}': {e}")
 
-    def build_handlers_map(self, handlers: list[MessageHandler]) -> dict[MessageHandlerType, list[MessageHandler]]:
+    def _build_handlers_map(self, handlers: list[MessageHandler]) -> dict[MessageHandlerType, list[MessageHandler]]:
         """Organizes handlers by message type, allowing multiple handlers per type."""
         handler_map = {}
         for handler in handlers:
@@ -183,6 +201,7 @@ class Consumer(threading.Thread):
                 del self.responses[corr_id]
 
     def stop(self) -> None:
+        self.ready_event.clear()
         self.shutdown_event.set()
 
 
@@ -191,54 +210,35 @@ class Publisher(threading.Thread):
         super().__init__()
         self.config: MessageNodeConfig = config
         self.publish_hashmap: dict[str, Publishing] = {}
-        self.publish_queue: queue.Queue = queue.Queue()
         self.shutdown_event: threading.Event = threading.Event()
-        self.build_publish_hashmap()
+        self.ready_event: threading.Event = threading.Event()
         self.connection: pika.BlockingConnection = None
         self.channel: Channel = None
+        self.logger = logger
+        self._build_publish_hashmap()
+
+    def _build_publish_hashmap(self) -> None:
+        """Builds a hashmap of routing keys to Publishing objects for quick lookup."""
+        for publishing in self.config.publishings:
+            for routing_key in publishing.routing_keys:
+                self.publish_hashmap[routing_key] = publishing
+        logger.info("Publishing map built successfully.")
 
     def run(self) -> None:
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.config.rabbitmq_server))
-        self.channel = self.connection.channel()
-        self.declare_exchanges()
+        try:
+            self._connect()
+            # Process data events to handle heartbeats and connection maintenance
+            while not self.shutdown_event.is_set():
+                # Check and process data events for a maximum of 1 sec before returning control
+                # to loop.
+                self.connection.process_data_events(time_limit=1)
 
-        while not self.shutdown_event.is_set():
-            # Block until an item is available. This is effectively event-driven.
-            item = self.publish_queue.get()
-            if item is None:
-                # Shutdown signal received, exit the loop
-                logger.info("Shutdown signal received in `publish_queue`, stopping publisher.")
-                break
+        except Exception as e:
+            logger.error(f"An error occurred in the Producer: {e}")
 
-            exchange, routing_key, properties, body = item
-            try:
-                self.channel.basic_publish(
-                    exchange=exchange,
-                    routing_key=routing_key,
-                    properties=properties,
-                    body=body,
-                )
-                logger.debug(f"Message published to exchange '{exchange}' with routing key '{routing_key}'.")
-            except Exception as e:
-                logger.error(
-                    f"Failed to publish message to exchange '{exchange}' with routing key '{routing_key}': {e}"
-                )
-            finally:
-                self.publish_queue.task_done()
+        self._cleanup()
 
-        self.channel.close()
-        self.connection.close()
-
-    def publish(self, routing_key: str, message: Message, corr_id=None) -> None:
-        publishing = self.publish_hashmap.get(routing_key)
-        properties = pika.BasicProperties(correlation_id=corr_id)
-        body = json.dumps(message, cls=CustomJSONEncoder)
-        if not publishing:
-            logger.error(f"No publishing configuration found for routing key '{routing_key}'. Message not sent.")
-            return
-        self.publish_queue.put((publishing.exchange, routing_key, properties, body))
-
-    def declare_exchanges(self) -> None:
+    def _declare_exchanges(self) -> None:
         for exchange in self.config.exchanges:
             try:
                 if self.channel:
@@ -248,20 +248,60 @@ class Publisher(threading.Thread):
                         durable=exchange.durable,
                         auto_delete=exchange.auto_delete,
                     )
-                logger.info("Exchanges imported and configured successfully.")
+                logger.info("Publisher Exchanges imported and configured successfully.")
             except Exception as e:
                 logger.error(f"Failed to declare exchange '{exchange.name}': {e}")
 
-    def build_publish_hashmap(self) -> None:
-        """Builds a hashmap of routing keys to Publishing objects for quick lookup."""
-        for publishing in self.config.publishings:
-            for routing_key in publishing.routing_keys:
-                self.publish_hashmap[routing_key] = publishing
-        logger.info("Publishing map built successfully.")
+    def _connect(self):
+        """Establishes the RabbitMQ connection and channel, and declares exchanges."""
+        try:
+            logger.info("Establishing Publisher connection")
+            self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.config.rabbitmq_server))
+            self.channel = self.connection.channel()
+            self._declare_exchanges()
+            logger.info(
+                f"Publisher connection established: connection: {self.connection.is_open}, channel: {self.channel.is_open}"
+            )
+            if not self.ready_event.is_set():
+                self.ready_event.set()
+        except Exception as e:
+            logging.error(f"Failed to establish connection or channel: {e}")
+
+    def _cleanup(self) -> None:
+        if self.channel:
+            self.channel.stop_consuming()
+            if self.channel.is_open:
+                self.channel.close()
+        if self.connection and self.connection.is_open:
+            self.connection.close()
+
+    def _publish(self, item):
+        exchange, routing_key, properties, body = item
+        self.channel.basic_publish(exchange=exchange, routing_key=routing_key, properties=properties, body=body)
+
+    def publish(self, routing_key: str, message: Message, corr_id=None) -> None:
+        publishing = self.publish_hashmap.get(routing_key)
+        properties = pika.BasicProperties(correlation_id=corr_id)
+        body = json.dumps(message, cls=CustomJSONEncoder)
+        if not publishing:
+            logger.error(f"No publishing configuration found for routing key '{routing_key}'. Message not sent.")
+            return
+        exchange = publishing.exchange
+        if not self.channel:
+            logging.error("Channel is not available. Unable to publish.")
+        if self.channel and not self.channel.is_open:
+            logging.error("Channel is not open. Unable to publish.")
+            return
+        try:
+            item = exchange, routing_key, properties, body
+            self.connection.add_callback_threadsafe(lambda: self._publish(item))
+            logger.debug(f"Message published to exchange '{exchange}' with routing key '{routing_key}'.")
+        except Exception as e:
+            logger.error(f"Failed to publish message to exchange '{exchange}' with routing key '{routing_key}': {e}")
 
     def stop(self) -> None:
+        self.ready_event.clear()
         self.shutdown_event.set()
-        self.publish_queue.put(None)  # Unblock the `get()` in `publish_queue`
 
 
 class MessageNode(IMessageNodeOperations):
@@ -269,13 +309,12 @@ class MessageNode(IMessageNodeOperations):
     def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler] = [], verbosity: int = 0):
         self.config: MessageNodeConfig = config
         self._msg_generator: MessageGenerator = MessageGenerator(config.name, config.message_version)
+        self.shutdown_hooks: list[Callable[[], None]] = []
 
-        # Link MessageNode to handlers' node operations interface
+        # Link MessageNode to handlers' node operations interface and register external shutdown hooks
         for handler in handlers:
             handler.set_node_operations(self)
-
-        self.consumer: Consumer = Consumer(config, handlers)
-        self.publisher: Publisher = Publisher(config)
+            self.shutdown_hooks.extend(handler.shutdown_hooks)
 
         if verbosity > 0:
             logger.setLevel(logging.INFO)
@@ -286,6 +325,9 @@ class MessageNode(IMessageNodeOperations):
             logger.setLevel(logging.DEBUG)
         if verbosity > 3:
             pika_logger.setLevel(logging.DEBUG)
+
+        self.consumer: Consumer = Consumer(config, handlers)
+        self.publisher: Publisher = Publisher(config)
 
     # Required form for IMessageNodeOperations
     @property
@@ -310,10 +352,15 @@ class MessageNode(IMessageNodeOperations):
         self.consumer.start()
         logger.info(f"Starting Publisher..")
         self.publisher.start()
+        self.consumer.ready_event.wait()
+        self.publisher.ready_event.wait()
 
     def stop(self) -> None:
         """Stop RMQ consumption and join consumer and producer threads."""
         try:
+            logger.info("Invoking shutdown hooks...")
+            for hook in self.shutdown_hooks:
+                hook()
             logger.info("Stopping Consumer...")
             self.consumer.stop()
             self.consumer.join()

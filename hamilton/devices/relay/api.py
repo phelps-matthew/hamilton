@@ -87,6 +87,7 @@ class FTDIBitbangRelay:
 
         except pylibftdi.FtdiError as e:
             self.log.exception(f"Failed to set relay {relay_num}")
+
         except Exception as e:
             self.log.exception("An unexpected error occurred while setting the relay")
 

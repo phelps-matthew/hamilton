@@ -1,18 +1,11 @@
 #!/home/mgp/miniforge3/envs/gr39/bin/python
 
 import argparse
-from hamilton.base.client import BaseClient
-from hamilton.devices.relay.config import Config
+from hamilton.devices.relay.client import RelayClient
+import time
 
-
-class RelayClient(BaseClient):
-    def __init__(self, config: Config):
-        super().__init__(config)
-        self.config = config
-
-
-def main():
-    client = RelayClient(config=Config)
+if __name__ == "__main__":
+    client = RelayClient()
 
     parser = argparse.ArgumentParser(description="Control and query the state of FTDI relays.")
     subparsers = parser.add_subparsers(dest="command", help="Sub-command help")
@@ -27,14 +20,27 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "set":
-        response = client.send_command("set", {"id": args.id, "state": args.state})
-        response = client.send_command("status", {})
-        print(response)
-    elif args.command == "status":
-        response = client.send_command("status", {})
-        print(response)
+    if args.command:
+        client.node.start()
+        try:
+            if args.command == "set":
+                command = args.command
+                params = {"id": args.id, "state": args.state}
+                message = client.node.msg_generator.generate_command(command, params)
+                # No relay response on set command
+                client.node.publish_message("observatory.device.relay.command.set", message)
+                command = "status"
+                params = {}
+                message = client.node.msg_generator.generate_command(command, params)
+                response = client.node.publish_rpc_message("observatory.device.relay.command.status", message)
+                print(response)
+            elif args.command == "status":
+                command = args.command
+                params = {}
+                message = client.node.msg_generator.generate_command(command, params)
+                response = client.node.publish_rpc_message("observatory.device.relay.command.status", message)
+                print(response)
 
+        finally:
+            client.node.stop()
 
-if __name__ == "__main__":
-    main()

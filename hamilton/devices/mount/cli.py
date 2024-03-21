@@ -1,40 +1,10 @@
 #!/home/mgp/miniforge3/envs/gr39/bin/python
 
-
 import argparse
-import json
-import time
-from typing import Any
-
-import pika
-from pika.channel import Channel
-from pika.spec import Basic
-
-from hamilton.base.message_node import MessageHandler, MessageNode
-from hamilton.base.messages import MessageHandlerType
-from hamilton.common.utils import CustomJSONDecoder, CustomJSONEncoder
-from hamilton.devices.mount.config import MountClientConfig
-
-
-class MountTelemetryHandler(MessageHandler):
-    def __init__(self):
-        super().__init__(MessageHandlerType.TELEMETRY)
-
-    def handle_message(self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes) -> Any:
-        message = json.loads(body, cls=CustomJSONDecoder)
-        return message["payload"]["parameters"]
-
-
-class MountClient:
-    def __init__(self, config, handlers: list[MessageHandler]):
-        self.node = MessageNode(config, handlers)
-
+from hamilton.devices.mount.client import MountClient
 
 if __name__ == "__main__":
-    config = MountClientConfig()
-    config.name = "MountCLIClient"
-    handlers = [MountTelemetryHandler()]
-    client = MountClient(config, handlers)
+    client = MountClient()
 
     # Setup argparser
     parser = argparse.ArgumentParser(
@@ -56,22 +26,21 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    try:
-        client.node.start()
-        if args.command:
-            command = args.command
-            params = {}
-            message = client.node.msg_generator.generate_command(command, params)
+    if args.command:
+        try:
+            client.node.start()
             if args.command == "set":
                 params = {"azimuth": args.azimuth, "elevation": args.elevation}
-                message = client.node.msg_generator.generate_command(command, params)
+                message = client.node.msg_generator.generate_command(args.command, params)
                 response = client.node.publish_rpc_message("observatory.device.mount.command.set", message)
             elif args.command == "status":
+                message = client.node.msg_generator.generate_command(args.command, {})
                 response = client.node.publish_rpc_message("observatory.device.mount.command.status", message)
             elif args.command == "stop":
+                message = client.node.msg_generator.generate_command(args.command, {})
                 response = client.node.publish_rpc_message("observatory.device.mount.command.stop", message)
 
             print("Response:", response)
 
-    finally:
-        client.node.stop()
+        finally:
+            client.node.stop()

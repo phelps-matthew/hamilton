@@ -18,22 +18,22 @@ class MountTelemetryHandler(MessageHandler):
 
     def handle_message(self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes) -> Any:
         message = json.loads(body, cls=CustomJSONDecoder)
-        payload = message["payload"]
-        return message
+        return message["payload"]["parameters"]
 
 
 class MountClient:
-    def __init__(self, config, handlers: list[MessageHandler]):
+    def __init__(
+        self,
+        config: MountClientConfig = MountClientConfig(),
+        handlers: list[MessageHandler] = [MountTelemetryHandler()],
+    ):
         self.node = MessageNode(config, handlers)
 
 
 if __name__ == "__main__":
-    config = MountClientConfig()
-    handlers = [MountTelemetryHandler()]
-    client = MountClient(config, handlers)
+    client = MountClient()
     try:
         client.node.start()
-        time.sleep(1)
         command = "status"
         parameters = {}
         message = client.node.msg_generator.generate_command(command, parameters)
