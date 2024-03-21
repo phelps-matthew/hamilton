@@ -9,16 +9,16 @@ import pika
 import pytz
 from skyfield.api import EarthSatellite, load, wgs84
 
-from hamilton.astrodynamics.config import Config
+from hamilton.astrodynamics.config import AstrodynamicsControllerConfig
 from hamilton.common.utils import CustomJSONEncoder
 
 
 class SpaceObjectTracker:
-    def __init__(self, config: Config):
+    def __init__(self, config: AstrodynamicsControllerConfig):
         self.config = config
 
         # DB query init
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.config.RABBITMQ_SERVER))
+        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.config.rabbitmq_server))
         self.channel = self.connection.channel()
         result = self.channel.queue_declare(queue="", exclusive=True)
         self.callback_queue = result.method.queue
