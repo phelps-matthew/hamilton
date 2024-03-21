@@ -3,6 +3,8 @@ Abstract base class for MessageNode, which represents an entity that consumes an
 
 Design choice: All command responses are published as telemetry. If command producer requires a response, they are to include a correlation_id in
 the message properties.
+
+See: https://github.com/pika/pika/blob/main/examples/long_running_publisher.py
 """
 
 import json
