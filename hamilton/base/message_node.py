@@ -83,7 +83,7 @@ class Consumer(threading.Thread):
         try:
             self._connect()
             while not self.shutdown_event.is_set():
-                self.connection.process_data_events(time_limit=0)  # Check for shutdown flag
+                self.connection.process_data_events(time_limit=1)  # Check for shutdown flag
 
         except Exception as e:
             logger.error(f"An error occurred in the Consumer: {e}")

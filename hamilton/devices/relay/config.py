@@ -10,7 +10,7 @@ class RelayControllerConfig(MessageNodeConfig):
         Binding(exchange="relay", routing_keys=["observatory.device.relay.command.*"]),
     ]
     publishings = [
-        Publishing(exchange="relay", rpc=False, routing_keys=["observatory.device.relay.telemetry.status"]),
+        Publishing(exchange="relay", routing_keys=["observatory.device.relay.telemetry.status"]),
     ]
 
     DEVICE_ID = "AB0OQ0PW"

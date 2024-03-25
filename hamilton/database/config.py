@@ -10,7 +10,22 @@ class DBUpdateConfig(GlobalConfig):
     JE9PEL_URL = "http://www.ne.jp/asahi/hamradio/je9pel/satslist.csv"
 
 
-class DBQueryConfig(GlobalConfig):
-    COMMAND_QUEUE = "db_query_commands"
-    AUTO_ACKNOWLEDGE = True
+from hamilton.base.config import MessageNodeConfig, Exchange, Binding, Publishing
+
+
+class DBQueryConfig(MessageNodeConfig):
+    name = "database_query"
+    exchanges = [
+        Exchange(name="database", type="topic", durable=True, auto_delete=False),
+    ]
+    bindings = [
+        Binding(exchange="database", routing_keys=["observatory.database.command.*"]),
+    ]
+    publishings = [
+        Publishing(exchange="database", routing_keys=["observatory.database.telemetry.query_record"]),
+        Publishing(exchange="database", routing_keys=["observatory.database.telemetry.get_satellite_ids"]),
+        Publishing(
+            exchange="database", routing_keys=["observatory.database.telemetry.get_active_downlink_satellite_ids"]
+        ),
+    ]
     DB_PATH = "./satcom.json"
