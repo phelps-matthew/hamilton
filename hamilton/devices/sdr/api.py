@@ -1,6 +1,6 @@
 """
 This is a wrapper around SigMFRecordFlowgraph, a self-contained flowgraph. It exposes appropriate methods to the SDR controller service and
-internally handles relay control
+internally handles relay control of the LNA.
 """
 
 from typing import Literal
