@@ -2,7 +2,8 @@ import signal
 import asyncio
 from typing import Optional
 
-from hamilton.base.message_node import MessageHandler, AsyncMessageNodeOperator
+from hamilton.message_node.interfaces import MessageHandler
+from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.base.messages import MessageHandlerType, Message
 from hamilton.devices.mount.config import MountClientConfig
 
@@ -16,7 +17,7 @@ class MountTelemetryHandler(MessageHandler):
 
 
 class MountClient(AsyncMessageNodeOperator):
-    def __init__(self, config=None, verbosity=3):
+    def __init__(self, config=None, verbosity=0):
         if config is None:
             config = MountClientConfig()
         handlers = [MountTelemetryHandler()]
@@ -43,7 +44,7 @@ async def main():
         await client.start()
         command = "status"
         parameters = {}
-        message = client.node.msg_generator.generate_command(command, parameters)
+        message = client.msg_generator.generate_command(command, parameters)
 
         # Publish message
         await client.publish_message("observatory.device.mount.command.status", message)

@@ -1,12 +1,12 @@
 import asyncio
+from typing import Optional
 import signal
 
-from typing import Optional
-from hamilton.base.message_node import MessageHandler, AsyncMessageNodeOperator
-from hamilton.base.messages import MessageHandlerType, Message
+from hamilton.message_node.interfaces import MessageHandler
+from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
+from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.devices.mount.api import ROT2Prog
 from hamilton.devices.mount.config import MountControllerConfig
-
 
 class MountCommandHandler(MessageHandler):
     def __init__(self, mount_driver: ROT2Prog):
@@ -19,7 +19,7 @@ class MountCommandHandler(MessageHandler):
         parameters = message["payload"]["parameters"]
 
         if command == "set":
-            response = self.mount.set(parameters.get("azimuth"), parameters.get("el"))
+            response = self.mount.set(parameters.get("azimuth"), parameters.get("elevation"))
         elif command == "status":
             response = self.mount.status()
         elif command == "stop":

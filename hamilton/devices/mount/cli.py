@@ -1,11 +1,32 @@
 #!/home/mgp/miniforge3/envs/gr39/bin/python
 
 import argparse
+import asyncio
 from hamilton.devices.mount.client import MountClient
 
-if __name__ == "__main__":
+
+async def handle_command(args):
     client = MountClient()
 
+    try:
+        await client.start()
+        if args.command == "set":
+            params = {"azimuth": args.azimuth, "elevation": args.elevation}
+            message = client.msg_generator.generate_command(args.command, params)
+            response = await client.publish_rpc_message("observatory.device.mount.command.set", message)
+        elif args.command == "status":
+            message = client.msg_generator.generate_command(args.command, {})
+            response = await client.publish_rpc_message("observatory.device.mount.command.status", message)
+        elif args.command == "stop":
+            message = client.msg_generator.generate_command(args.command, {})
+            response = await client.publish_rpc_message("observatory.device.mount.command.stop", message)
+
+        print("Response:", response)
+    finally:
+        await client.stop()
+
+
+if __name__ == "__main__":
     # Setup argparser
     parser = argparse.ArgumentParser(
         description="Control the mount system using various commands",
@@ -27,20 +48,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.command:
-        try:
-            client.node.start()
-            if args.command == "set":
-                params = {"azimuth": args.azimuth, "elevation": args.elevation}
-                message = client.node.msg_generator.generate_command(args.command, params)
-                response = client.node.publish_rpc_message("observatory.device.mount.command.set", message)
-            elif args.command == "status":
-                message = client.node.msg_generator.generate_command(args.command, {})
-                response = client.node.publish_rpc_message("observatory.device.mount.command.status", message)
-            elif args.command == "stop":
-                message = client.node.msg_generator.generate_command(args.command, {})
-                response = client.node.publish_rpc_message("observatory.device.mount.command.stop", message)
-
-            print("Response:", response)
-
-        finally:
-            client.node.stop()
+        asyncio.run(handle_command(args))
+    else:
+        parser.print_help()
