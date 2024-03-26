@@ -12,13 +12,26 @@ logger = logging.getLogger(__name__)
 
 
 class AsyncConsumer:
-    def __init__(self, config: MessageNodeConfig, rpc_manager: RPCManager, handlers: list[MessageHandler] = []):
+    def __init__(
+        self,
+        config: MessageNodeConfig,
+        rpc_manager: RPCManager,
+        handlers: list[MessageHandler] = [],
+        verbosity: int = 0,
+    ):
         self.config: MessageNodeConfig = config
         self.connection: aio_pika.Connection = None
         self.channel: aio_pika.Channel = None
         self.rpc_manager: RPCManager = rpc_manager
         self.handlers = handlers
         self.handlers_map: dict[MessageHandlerType, list[MessageHandler]] = {}
+
+        if verbosity == 0:
+            logger.setLevel(logging.WARNING)
+        elif verbosity == 1:
+            logger.setLevel(logging.INFO)
+        else:
+            logger.setLevel(logging.DEBUG)
 
     async def _connect(self):
         self.connection = await aio_pika.connect_robust(self.config.rabbitmq_server)

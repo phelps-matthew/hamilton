@@ -16,7 +16,7 @@ class AsyncMessageNodeOperator:
     handlers : list[MessageHandler]
         The list of message handlers.
     verbosity : int, optional
-        The verbosity level, defaults to 3.
+        The verbosity level, defaults to 2.
 
     Methods
     -------
@@ -30,7 +30,7 @@ class AsyncMessageNodeOperator:
         Publish a RPC message to the message node asynchronously and wait for the response.
     """
 
-    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler], verbosity: int = 3):
+    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler], verbosity: int = 2):
         self.node = AsyncMessageNode(config, handlers, verbosity)
         self.config = config
 

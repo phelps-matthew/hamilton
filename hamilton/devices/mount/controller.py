@@ -36,7 +36,7 @@ class MountCommandHandler(MessageHandler):
 
 
 class MountController(AsyncMessageNodeOperator):
-    def __init__(self, config: MountControllerConfig = None, verbosity: int = 3):
+    def __init__(self, config: MountControllerConfig = None, verbosity: int = 1):
         if config is None:
             config = MountControllerConfig()
         mount_driver = ROT2Prog(config.DEVICE_ADDRESS)

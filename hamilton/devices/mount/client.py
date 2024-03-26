@@ -38,7 +38,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    client = MountClient()
+    client = MountClient(verbosity=1)
 
     try:
         await client.start()
