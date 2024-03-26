@@ -3,6 +3,9 @@ Abstract base class for MessageNode, which represents an entity that consumes an
 
 Design choice: All command responses are published as telemetry. If command producer requires a response, they are to include a correlation_id in
 the message properties.
+
+Any I/O operations are to be implemented as async methods. This includes any I/O operations that are not directly related to RabbitMQ, such as
+file I/O or network I/O.
 """
 
 import json
@@ -126,17 +129,14 @@ class AsyncConsumer:
     async def start_consuming(self):
         logger.info("Starting consuming...")
         await self._connect()
-        logger.debug("Connection established.")
-        await self._build_handlers_map()
-        logger.debug(f"Handlers map built.")
+        self._build_handlers_map()
         await self._declare_exchanges()
-        logger.debug("Exchanges declared.")
         await self._setup_bindings()
-        logger.debug("Bindings setup.")
         # Setup consumer
         queue_name = f"{self.config.bindings[0].exchange}_{self.config.name}"
         queue = await self.channel.get_queue(queue_name)
         logger.debug(f"Queue {queue_name} obtained.")
+        # This registers an on-going consumption task with the event loop and immediately returns
         await queue.consume(self._on_message_received)
         logger.info("Consumer setup complete.")
 
@@ -159,7 +159,7 @@ class AsyncConsumer:
         else:
             logger.warning(f"No handlers found for message type: {message_type}")
 
-    async def _build_handlers_map(self):
+    def _build_handlers_map(self):
         """Organizes handlers by message type, allowing multiple handlers per type."""
         for handler in self.handlers:
             # If the handler is for 'all' message types, add it to all types except 'ALL'
@@ -183,13 +183,12 @@ class AsyncConsumer:
 class AsyncPublisher:
     def __init__(self, config: MessageNodeConfig, rpc_manager: RPCManager):
         self.config: MessageNodeConfig = config
-        self.publish_hashmap: dict[str, Publishing] = {}
+        self.publish_hashmap: dict[str, Publishing] = self._build_publish_hashmap()
         self.connection: aio_pika.Connection = None
         self.channel: aio_pika.Channel = None
         self.rpc_manager: RPCManager = rpc_manager
-        self.loop = asyncio.get_running_loop()
 
-    async def _build_publish_hashmap(self) -> dict:
+    def _build_publish_hashmap(self) -> dict:
         """Builds a hashmap of routing keys to Publishing objects for quick lookup."""
         publish_hashmap = {}
         for publishing in self.config.publishings:
@@ -199,10 +198,9 @@ class AsyncPublisher:
         return publish_hashmap
 
     async def _connect(self):
-        """Establishes the RabbitMQ connection and channel, and declares exchanges."""
+        """Establishes the RabbitMQ connection and channel and declares exchanges."""
         self.connection = await aio_pika.connect_robust(self.config.rabbitmq_server)
         self.channel = await self.connection.channel()
-        self.publish_hashmap = await self._build_publish_hashmap()
         await self._declare_exchanges()
 
     async def _declare_exchanges(self):
@@ -284,7 +282,6 @@ class AsyncMessageNode(IMessageNodeOperations):
         self.rpc_manager: RPCManager = RPCManager()
         self.consumer: AsyncConsumer = AsyncConsumer(config, self.rpc_manager, handlers)
         self.publisher: AsyncPublisher = AsyncPublisher(config, self.rpc_manager)
-        self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self._msg_generator: MessageGenerator = MessageGenerator(config.name, config.message_version)
         self.shutdown_hooks: list[Callable[[], None]] = []
 
@@ -310,7 +307,7 @@ class AsyncMessageNode(IMessageNodeOperations):
     async def start(self):
         """Starts the consumer and publisher asynchronously."""
         await self.consumer.start_consuming()
-        logger.info("Started the Consumer and publisher asynchronously.")
+        logger.info("Started the consumer and publisher asynchronously.")
 
     async def stop(self):
         """Stops the consumer and publisher asynchronously."""
@@ -334,3 +331,49 @@ class AsyncMessageNode(IMessageNodeOperations):
     def msg_generator(self, value: MessageGenerator) -> None:
         self._msg_generator = value
         logger.info("Updated message generator.")
+
+
+class AsyncMessageNodeOperator:
+    """
+    A base class to operate on AsyncMessageNode. Subclassed by clients and controllers, for example.
+
+    Attributes
+    ----------
+    config : MessageNodeConfig
+        The configuration for the message node.
+    handlers : list[MessageHandler]
+        The list of message handlers.
+    verbosity : int, optional
+        The verbosity level, defaults to 3.
+
+    Methods
+    -------
+    start()
+        Start the message node.
+    stop()
+        Stop the message node.
+    publish_message(routing_key: str, message: dict, corr_id: Optional[str] = None)
+        Publish a message to the message node.
+    publish_rpc_message(routing_key: str, message: dict, timeout: int = 10)
+        Publish a RPC message to the message node.
+    """
+
+    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler], verbosity: int = 3):
+        self.node = AsyncMessageNode(config, handlers, verbosity)
+        self.config = config
+
+    async def start(self) -> None:
+        """Start the message node."""
+        await self.node.start()
+
+    async def stop(self) -> None:
+        """Stop the message node."""
+        await self.node.stop()
+
+    async def publish_message(self, routing_key: str, message: Message, corr_id: Optional[str] = None) -> None:
+        """Publish a message to the message node."""
+        return await self.node.publish_message(routing_key, message, corr_id)
+
+    async def publish_rpc_message(self, routing_key: str, message: Message, timeout: int = 10) -> Any:
+        """Publish a RPC message to the message node."""
+        return await self.node.publish_rpc_message(routing_key, message, timeout)

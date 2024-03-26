@@ -2,9 +2,8 @@ import signal
 import asyncio
 from typing import Optional
 
-from hamilton.base.message_node import AsyncMessageNode, MessageHandler
+from hamilton.base.message_node import MessageHandler, AsyncMessageNodeOperator
 from hamilton.base.messages import MessageHandlerType, Message
-from hamilton.common.utils import CustomJSONDecoder
 from hamilton.devices.mount.config import MountClientConfig
 
 
@@ -16,25 +15,12 @@ class MountTelemetryHandler(MessageHandler):
         return message["payload"]["parameters"]
 
 
-class MountClient:
-    def __init__(
-        self,
-        config: MountClientConfig = MountClientConfig(),
-        handlers: list[MessageHandler] = [MountTelemetryHandler()],
-    ):
-        self.node = AsyncMessageNode(config, handlers, verbosity=3)
-
-    async def start(self):
-        await self.node.start()
-
-    async def stop(self):
-        await self.node.stop()
-
-    async def publish_message(self, routing_key: str, message: dict, corr_id: Optional[str] = None):
-        return await self.node.publish_message(routing_key, message, corr_id)
-
-    async def publish_rpc_message(self, routing_key: str, message: dict, timeout: int = 10):
-        return await self.node.publish_rpc_message(routing_key, message, timeout)
+class MountClient(AsyncMessageNodeOperator):
+    def __init__(self, config=None, verbosity=3):
+        if config is None:
+            config = MountClientConfig()
+        handlers = [MountTelemetryHandler()]
+        super().__init__(config, handlers, verbosity)
 
 
 shutdown_event = asyncio.Event()
@@ -51,9 +37,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    config = MountClientConfig()
-    handlers = [MountTelemetryHandler()]
-    client = MountClient(config, handlers)
+    client = MountClient()
 
     try:
         await client.start()
@@ -63,11 +47,14 @@ async def main():
 
         # Publish message
         await client.publish_message("observatory.device.mount.command.status", message)
+
         # Publish RPC message and await response
         response = await client.publish_rpc_message("observatory.device.mount.command.status", message)
         print(response)
+
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+
     finally:
         await client.stop()
 

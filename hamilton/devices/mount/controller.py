@@ -1,10 +1,9 @@
 import asyncio
 import signal
 
-from typing import Any, Optional
-from hamilton.base.message_node import AsyncMessageNode, MessageHandler
+from typing import Optional
+from hamilton.base.message_node import MessageHandler, AsyncMessageNodeOperator
 from hamilton.base.messages import MessageHandlerType, Message
-from hamilton.common.utils import CustomJSONDecoder
 from hamilton.devices.mount.api import ROT2Prog
 from hamilton.devices.mount.config import MountControllerConfig
 
@@ -14,9 +13,8 @@ class MountCommandHandler(MessageHandler):
         super().__init__(message_type=MessageHandlerType.COMMAND)
         self.mount: ROT2Prog = mount_driver
 
-    async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> Any:
+    async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> None:
         response = None
-        print(f"MountCommandHandler: Received message: {message}")
         command = message["payload"]["commandType"]
         parameters = message["payload"]["parameters"]
 
@@ -37,15 +35,13 @@ class MountCommandHandler(MessageHandler):
             )
 
 
-class MountController:
-    def __init__(self, config: MountControllerConfig, handlers: list[MessageHandler]):
-        self.node = AsyncMessageNode(config, handlers, verbosity=3)
-
-    async def start(self):
-        await self.node.start()
-
-    async def stop(self):
-        await self.node.stop()
+class MountController(AsyncMessageNodeOperator):
+    def __init__(self, config: MountControllerConfig = None, verbosity: int = 3):
+        if config is None:
+            config = MountControllerConfig()
+        mount_driver = ROT2Prog(config.DEVICE_ADDRESS)
+        handlers = [MountCommandHandler(mount_driver)]
+        super().__init__(config, handlers, verbosity)
 
 
 shutdown_event = asyncio.Event()
@@ -62,16 +58,15 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    config = MountControllerConfig()
-    mount_driver = ROT2Prog(config.DEVICE_ADDRESS)
-    handlers = [MountCommandHandler(mount_driver)]
-    controller = MountController(config, handlers)
+    controller = MountController()
 
     try:
         await controller.start()
         await shutdown_event.wait()  # Wait for the shutdown signal
+
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+
     finally:
         await controller.stop()
 
