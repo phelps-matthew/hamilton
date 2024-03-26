@@ -1,6 +1,6 @@
 import signal
 import asyncio
-from typing import Any, Optional
+from typing import Optional
 
 from hamilton.base.message_node import AsyncMessageNode, MessageHandler
 from hamilton.base.messages import MessageHandlerType, Message
@@ -13,8 +13,6 @@ class MountTelemetryHandler(MessageHandler):
         super().__init__(MessageHandlerType.TELEMETRY)
 
     async def handle_message(self, message: Message, correlation_id: Optional[str] = None):
-        # Assuming the message handling is now asynchronous
-        print(f"MountTelemetryHandler: Received message body: {message}")
         return message["payload"]["parameters"]
 
 
@@ -63,8 +61,9 @@ async def main():
         parameters = {}
         message = client.node.msg_generator.generate_command(command, parameters)
 
-        # Publishing a message and waiting for an RPC response
-        #await client.publish_message("observatory.device.mount.command.status", message)
+        # Publish message
+        await client.publish_message("observatory.device.mount.command.status", message)
+        # Publish RPC message and await response
         response = await client.publish_rpc_message("observatory.device.mount.command.status", message)
         print(response)
     except Exception as e:

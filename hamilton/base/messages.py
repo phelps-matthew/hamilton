@@ -16,17 +16,30 @@ class MessageHandlerType(Enum):
     ALL = "all"
 
 
-CommandPayload = TypedDict("CommandPayload", {"commandType": str, "parameters": Dict[str, Union[str, int, float]]})
-TelemetryPayload = TypedDict(
-    "TelemetryPayload", {"telemetryType": str, "parameters": Dict[str, Union[str, int, float]]}
-)
-ResponsePayload = TypedDict("ResponsePayload", {"responseType": str, "data": Dict[str, Union[str, int, float]]})
+class CommandPayload(TypedDict):
+    commandType: str
+    parameters: Dict[str, Union[str, int, float]]
+
+
+class TelemetryPayload(TypedDict):
+    telemetryType: str
+    parameters: Dict[str, Union[str, int, float]]
+
+
+class ResponsePayload(TypedDict):
+    responseType: str
+    data: Dict[str, Union[str, int, float]]
+
 
 Payload = Union[CommandPayload, TelemetryPayload, ResponsePayload]
 
-Message = TypedDict(
-    "Message", {"messageType": MessageType, "timestamp": str, "source": str, "version": str, "payload": Payload}
-)
+
+class Message(TypedDict):
+    messageType: MessageType
+    timestamp: str
+    source: str
+    version: str
+    payload: Payload
 
 
 class MessageGenerator:

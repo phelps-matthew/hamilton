@@ -3,8 +3,6 @@ Abstract base class for MessageNode, which represents an entity that consumes an
 
 Design choice: All command responses are published as telemetry. If command producer requires a response, they are to include a correlation_id in
 the message properties.
-
-See: https://github.com/pika/pika/blob/main/examples/long_running_publisher.py
 """
 
 import json
@@ -27,9 +25,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger("message_node")
 logger.propagate = False  # Prevent logging from propagating to the root logger
 
-# Adjust the logging level for pika
-pika_logger = logging.getLogger("aio_pika")
-pika_logger.setLevel(logging.WARNING)
+# Adjust the logging level for aio_pika
+aio_pika_logger = logging.getLogger("aio_pika")
+aio_pika_logger.setLevel(logging.WARNING)
 
 
 # Surfaces what methods are available to classes that interface with MessageNode instances
@@ -190,7 +188,6 @@ class AsyncPublisher:
         self.channel: aio_pika.Channel = None
         self.rpc_manager: RPCManager = rpc_manager
         self.loop = asyncio.get_running_loop()
-        self.logger = logger
 
     async def _build_publish_hashmap(self) -> dict:
         """Builds a hashmap of routing keys to Publishing objects for quick lookup."""
@@ -301,13 +298,13 @@ class AsyncMessageNode(IMessageNodeOperations):
             logger.propagate = True
             logger.info("Setting logger level to INFO")
         if verbosity > 1:
-            pika_logger.setLevel(logging.INFO)
+            aio_pika_logger.setLevel(logging.INFO)
             logger.info("Setting pika logger level to INFO")
         if verbosity > 2:
             logger.setLevel(logging.DEBUG)
             logger.info("Setting logger level to DEBUG")
         if verbosity > 3:
-            pika_logger.setLevel(logging.DEBUG)
+            aio_pika_logger.setLevel(logging.DEBUG)
             logger.info("Setting pika logger level to DEBUG")
 
     async def start(self):
