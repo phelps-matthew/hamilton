@@ -9,15 +9,14 @@ See: https://github.com/pika/pika/blob/main/examples/long_running_publisher.py
 
 import json
 import logging
-import signal
-import threading
 import uuid
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional
 
-import pika
-from pika.channel import Channel
-from pika.spec import Basic
+import asyncio
+import aio_pika
+from aio_pika import ExchangeType, Message as AioPikaMessage
+from aio_pika import IncomingMessage
 
 from hamilton.base.config import MessageNodeConfig, Publishing
 from hamilton.base.messages import Message, MessageGenerator, MessageHandlerType
@@ -29,7 +28,7 @@ logger = logging.getLogger("message_node")
 logger.propagate = False  # Prevent logging from propagating to the root logger
 
 # Adjust the logging level for pika
-pika_logger = logging.getLogger("pika")
+pika_logger = logging.getLogger("aio_pika")
 pika_logger.setLevel(logging.WARNING)
 
 
@@ -38,11 +37,11 @@ class IMessageNodeOperations(ABC):
     """Defines MessageNode interfacing operations"""
 
     @abstractmethod
-    def publish_message(self, routing_key: str, message: Message) -> None:
+    def publish_message(self, routing_key: str, message: Message, corr_id: Optional[str] = None) -> None:
         pass
 
     @abstractmethod
-    def publish_rpc_message(self, routing_key: str, message: Message) -> Any:
+    def publish_rpc_message(self, routing_key: str, message: Message, timeout: int = 10) -> Any:
         pass
 
     @property
@@ -62,254 +61,233 @@ class MessageHandler(ABC):
         self.node_operations = node_operations
 
     @abstractmethod
-    def handle_message(self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes) -> Any:
+    async def handle_message(self, message: dict, correlation_id: Optional[str] = None) -> Any:
         """Process the received message."""
-        pass
+        raise NotImplementedError
 
 
-class Consumer(threading.Thread):
-    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler]):
-        super().__init__()
+class RPCManager:
+    def __init__(self):
+        self.rpc_events: dict[str, asyncio.Future] = {}
+
+    def create_future_for_rpc(self, correlation_id: str) -> asyncio.Future:
+        """Creates a future for an RPC call identified by the given correlation ID."""
+        if correlation_id in self.rpc_events:
+            raise ValueError(f"Correlation ID {correlation_id} already in use.")
+        future = asyncio.get_event_loop().create_future()
+        self.rpc_events[correlation_id] = future
+        return future
+
+    def handle_incoming_message(self, message: Message, correlation_id: str):
+        """Handles incoming messages by checking if they correspond to any waiting RPC calls."""
+        if correlation_id and correlation_id in self.rpc_events:
+            future = self.rpc_events.pop(correlation_id, None)
+            if future and not future.done():
+                future.set_result(message)
+
+    def cleanup(self, correlation_id: str):
+        """Cleans up any resources associated with a given correlation ID, if necessary."""
+        self.rpc_events.pop(correlation_id, None)
+
+
+class AsyncConsumer:
+    def __init__(self, config: MessageNodeConfig, rpc_manager: RPCManager, handlers: list[MessageHandler] = []):
         self.config: MessageNodeConfig = config
-        self.shutdown_event: threading.Event = threading.Event()
-        self.ready_event: threading.Event = threading.Event()
-        self.responses: dict[str, Union[threading.Event, Any]] = {}
-        self.responses_lock: threading.Lock = threading.Lock()
-        self.handlers_map: dict[MessageHandlerType, list[MessageHandler]] = self._build_handlers_map(handlers)
-        self.connection: pika.BlockingConnection = None
-        self.channel: Channel = None
+        self.connection: aio_pika.Connection = None
+        self.channel: aio_pika.Channel = None
+        self.rpc_manager: RPCManager = rpc_manager
+        self.handlers = handlers
+        self.handlers_map: dict[MessageHandlerType, list[MessageHandler]] = {}
 
-    def run(self) -> None:
-        try:
-            self._connect()
-            while not self.shutdown_event.is_set():
-                self.connection.process_data_events(time_limit=1)  # Check for shutdown flag
+    async def _connect(self):
+        self.connection = await aio_pika.connect_robust(self.config.rabbitmq_server)
+        self.channel = await self.connection.channel()
 
-        except Exception as e:
-            logger.error(f"An error occurred in the Consumer: {e}")
-        self._cleanup()
+    async def _declare_exchanges(self):
+        for exchange in self.config.exchanges:
+            logger.info(f"Declaring exchange: {exchange.name}")
+            await self.channel.declare_exchange(
+                exchange.name,
+                aio_pika.ExchangeType(exchange.type),
+                durable=exchange.durable,
+                auto_delete=exchange.auto_delete,
+            )
+            logger.debug(f"Exchange {exchange.name} declared successfully.")
 
-    def _on_message_received(
-        self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes
-    ) -> None:
-        message = json.loads(body, cls=CustomJSONDecoder)
-        message_type = MessageHandlerType(message.get("messageType"))
-        logger.debug(f"Receieved message of type {message_type} and body {message}")
+    async def _setup_bindings(self):
+        for binding in self.config.bindings:
+            queue_name = f"{binding.exchange}_{self.config.name}"
+            queue = await self.channel.declare_queue(queue_name)
+            logger.info(f"Declared queue: {queue_name}")
+            for routing_key in binding.routing_keys:
+                await queue.bind(binding.exchange, routing_key)
+                logger.debug(
+                    f"Bound queue: {queue_name} to exchange: {binding.exchange} with routing key: {routing_key}"
+                )
 
-        # Extract and handle the correlation_id for RPC responses
-        corr_id = properties.correlation_id
-        event = None
-        if corr_id:
-            item = self.get_event_response(corr_id)
-            if item:
-                event = item.get("event", None)
-                if not event:
-                    logger.warning(f"No event associated with correlation id `{corr_id}")
+    async def start_consuming(self):
+        logger.info("Starting consuming...")
+        await self._connect()
+        logger.debug("Connection established.")
+        await self._build_handlers_map()
+        logger.debug(f"Handlers map built.")
+        await self._declare_exchanges()
+        logger.debug("Exchanges declared.")
+        await self._setup_bindings()
+        logger.debug("Bindings setup.")
+        # Setup consumer
+        queue_name = f"{self.config.bindings[0].exchange}_{self.config.name}"
+        queue = await self.channel.get_queue(queue_name)
+        logger.debug(f"Queue {queue_name} obtained.")
+        await queue.consume(self._on_message_received)
+        logger.info("Consumer setup complete.")
 
-        # Pass message to registered handlers and trigger response for RPC requests
-        handlers = self.handlers_map.get(message_type, [])
+    async def _on_message_received(self, message: IncomingMessage):
+        # Performs message acknowledgement
+        async with message.process():
+            message_body = json.loads(message.body.decode(), cls=CustomJSONDecoder)
+            try:
+                message_type = MessageHandlerType(message_body.get("messageType"))
+            except ValueError:
+                logger.error(f"Invalid message type: {message_body.get('messageType')}")
+            handlers = self.handlers_map.get(message_type, [])
+            correlation_id = message.correlation_id
+            logger.debug(f"Consumer: Received message with correlation id: {correlation_id} and type: {message_type}")
         if handlers:
             for handler in handlers:
-                response = handler.handle_message(ch, method, properties, body)
-                if corr_id and event:
-                    self.set_event_response(corr_id, event, response)
-                    event.set()
+                response = await handler.handle_message(message_body, correlation_id)
+                if correlation_id:
+                    self.rpc_manager.handle_incoming_message(response, correlation_id)
         else:
             logger.warning(f"No handlers found for message type: {message_type}")
 
-    def _connect(self):
-        """Establishes the RabbitMQ connection and channel, and declares exchanges."""
-        try:
-            logger.info("Establishing Consumer connection")
-            self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.config.rabbitmq_server))
-            self.channel = self.connection.channel()
-            self._declare_exchanges()
-            self._setup_bindings()
-            logger.info(
-                f"Consumer connection established: connection: {self.connection.is_open}, channel: {self.channel.is_open}"
-            )
-            if not self.ready_event.is_set():
-                self.ready_event.set()
-        except Exception as e:
-            logging.error(f"Failed to establish connection or channel: {e}")
-
-    def _cleanup(self) -> None:
-        if self.channel:
-            self.channel.stop_consuming()
-            if self.channel.is_open:
-                self.channel.close()
-        if self.connection and self.connection.is_open:
-            self.connection.close()
-
-    def _declare_exchanges(self) -> None:
-        for exchange in self.config.exchanges:
-            try:
-                if self.channel:
-                    self.channel.exchange_declare(
-                        exchange=exchange.name,
-                        exchange_type=exchange.type,
-                        durable=exchange.durable,
-                        auto_delete=exchange.auto_delete,
-                    )
-                logger.info("Exchanges imported and configured successfully.")
-            except Exception as e:
-                logger.error(f"Failed to declare exchange '{exchange.name}': {e}")
-
-    def _setup_bindings(self) -> None:
-        for binding in self.config.bindings:
-            queue_name = f"{binding.exchange}_{self.config.name}"
-            try:
-                self.channel.queue_declare(queue=queue_name)
-                for routing_key in binding.routing_keys:
-                    self.channel.queue_bind(exchange=binding.exchange, queue=queue_name, routing_key=routing_key)
-                consumer_tag = self.channel.basic_consume(
-                    queue=queue_name, on_message_callback=self._on_message_received, auto_ack=True
-                )
-                logger.info(
-                    f"Bindings for queue '{queue_name}' with consumer tag '{consumer_tag}' configured successfully."
-                )
-            except Exception as e:
-                logger.error(f"Failed to setup bindings for queue '{queue_name}': {e}")
-
-    def _build_handlers_map(self, handlers: list[MessageHandler]) -> dict[MessageHandlerType, list[MessageHandler]]:
+    async def _build_handlers_map(self):
         """Organizes handlers by message type, allowing multiple handlers per type."""
-        handler_map = {}
-        for handler in handlers:
+        for handler in self.handlers:
             # If the handler is for 'all' message types, add it to all types except 'ALL'
             if handler.message_type == MessageHandlerType.ALL:
                 for message_type in MessageHandlerType:
                     if message_type != MessageHandlerType.ALL:
-                        handler_map.setdefault(message_type, []).append(handler)
+                        self.handlers_map.setdefault(message_type, []).append(handler)
             else:
                 # Add handler to its specific message type
-                handler_map.setdefault(handler.message_type, []).append(handler)
+                self.handlers_map.setdefault(handler.message_type, []).append(handler)
 
-        return handler_map
-
-    def get_event_response(self, corr_id: str) -> dict[str, Union[threading.Event, Any]]:
-        """Retrieve event-response pair based on its correlation ID in a thread-safe manner."""
-        with self.responses_lock:
-            return self.responses.get(corr_id)
-
-    def set_event_response(self, corr_id: str, event: threading.Event, response: Any = None) -> None:
-        """Set an event-response pair based on its correlation ID in a thread-safe manner."""
-        with self.responses_lock:
-            self.responses[corr_id] = {"event": event, "response": response}
-
-    def del_event_response(self, corr_id: str) -> None:
-        """Delete an event-response based on its correlation ID in a thread-safe manner."""
-        with self.responses_lock:
-            if corr_id in self.responses:
-                del self.responses[corr_id]
-
-    def stop(self) -> None:
-        self.ready_event.clear()
-        self.shutdown_event.set()
+    async def stop(self):
+        logger.info("Stopping consumer...")
+        if self.channel:
+            await self.channel.close()
+        if self.connection:
+            await self.connection.close()
+        logger.info("Consumer stopped successfully.")
 
 
-class Publisher(threading.Thread):
-    def __init__(self, config: MessageNodeConfig):
-        super().__init__()
+class AsyncPublisher:
+    def __init__(self, config: MessageNodeConfig, rpc_manager: RPCManager):
         self.config: MessageNodeConfig = config
         self.publish_hashmap: dict[str, Publishing] = {}
-        self.shutdown_event: threading.Event = threading.Event()
-        self.ready_event: threading.Event = threading.Event()
-        self.connection: pika.BlockingConnection = None
-        self.channel: Channel = None
+        self.connection: aio_pika.Connection = None
+        self.channel: aio_pika.Channel = None
+        self.rpc_manager: RPCManager = rpc_manager
+        self.loop = asyncio.get_running_loop()
         self.logger = logger
-        self._build_publish_hashmap()
 
-    def _build_publish_hashmap(self) -> None:
+    async def _build_publish_hashmap(self) -> dict:
         """Builds a hashmap of routing keys to Publishing objects for quick lookup."""
+        publish_hashmap = {}
         for publishing in self.config.publishings:
             for routing_key in publishing.routing_keys:
-                self.publish_hashmap[routing_key] = publishing
+                publish_hashmap[routing_key] = publishing
         logger.info("Publishing map built successfully.")
+        return publish_hashmap
 
-    def run(self) -> None:
-        try:
-            self._connect()
-            # Process data events to handle heartbeats and connection maintenance
-            while not self.shutdown_event.is_set():
-                # Check and process data events for a maximum of 1 sec before returning control
-                # to loop.
-                self.connection.process_data_events(time_limit=1)
+    async def _connect(self):
+        """Establishes the RabbitMQ connection and channel, and declares exchanges."""
+        self.connection = await aio_pika.connect_robust(self.config.rabbitmq_server)
+        self.channel = await self.connection.channel()
+        self.publish_hashmap = await self._build_publish_hashmap()
+        await self._declare_exchanges()
 
-        except Exception as e:
-            logger.error(f"An error occurred in the Producer: {e}")
-
-        self._cleanup()
-
-    def _declare_exchanges(self) -> None:
+    async def _declare_exchanges(self):
+        """Declares necessary exchanges."""
         for exchange in self.config.exchanges:
             try:
-                if self.channel:
-                    self.channel.exchange_declare(
-                        exchange=exchange.name,
-                        exchange_type=exchange.type,
-                        durable=exchange.durable,
-                        auto_delete=exchange.auto_delete,
-                    )
-                logger.info("Publisher Exchanges imported and configured successfully.")
+                await self.channel.declare_exchange(
+                    exchange.name,
+                    ExchangeType(exchange.type),
+                    durable=exchange.durable,
+                    auto_delete=exchange.auto_delete,
+                )
+                logger.info(f"Exchange '{exchange.name}' declared successfully.")
             except Exception as e:
                 logger.error(f"Failed to declare exchange '{exchange.name}': {e}")
 
-    def _connect(self):
-        """Establishes the RabbitMQ connection and channel, and declares exchanges."""
-        try:
-            logger.info("Establishing Publisher connection")
-            self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.config.rabbitmq_server))
-            self.channel = self.connection.channel()
-            self._declare_exchanges()
-            logger.info(
-                f"Publisher connection established: connection: {self.connection.is_open}, channel: {self.channel.is_open}"
-            )
-            if not self.ready_event.is_set():
-                self.ready_event.set()
-        except Exception as e:
-            logging.error(f"Failed to establish connection or channel: {e}")
+    async def publish(self, routing_key: str, message: Message, corr_id: Optional[str] = None):
+        """Publishes a message asynchronously."""
+        if not self.connection or not self.channel:
+            await self._connect()
 
-    def _cleanup(self) -> None:
-        if self.channel:
-            self.channel.stop_consuming()
-            if self.channel.is_open:
-                self.channel.close()
-        if self.connection and self.connection.is_open:
-            self.connection.close()
-
-    def _publish(self, item):
-        exchange, routing_key, properties, body = item
-        self.channel.basic_publish(exchange=exchange, routing_key=routing_key, properties=properties, body=body)
-
-    def publish(self, routing_key: str, message: Message, corr_id=None) -> None:
         publishing = self.publish_hashmap.get(routing_key)
-        properties = pika.BasicProperties(correlation_id=corr_id)
-        body = json.dumps(message, cls=CustomJSONEncoder)
         if not publishing:
             logger.error(f"No publishing configuration found for routing key '{routing_key}'. Message not sent.")
             return
-        exchange = publishing.exchange
-        if not self.channel:
-            logging.error("Channel is not available. Unable to publish.")
-        if self.channel and not self.channel.is_open:
-            logging.error("Channel is not open. Unable to publish.")
-            return
+
+        exchange_name = publishing.exchange
+        body = json.dumps(message, cls=CustomJSONEncoder).encode("utf-8")
+
         try:
-            item = exchange, routing_key, properties, body
-            self.connection.add_callback_threadsafe(lambda: self._publish(item))
+            exchange = await self.channel.get_exchange(exchange_name)
+            await exchange.publish(
+                AioPikaMessage(body=body, content_type="application/json", correlation_id=corr_id),
+                routing_key=routing_key,
+            )
             logger.debug(f"Message published to exchange '{exchange}' with routing key '{routing_key}'.")
         except Exception as e:
             logger.error(f"Failed to publish message to exchange '{exchange}' with routing key '{routing_key}': {e}")
 
-    def stop(self) -> None:
-        self.ready_event.clear()
-        self.shutdown_event.set()
+    async def publish_rpc_message(self, routing_key: str, message: dict, timeout: int = 10) -> Any:
+        if not self.connection or not self.channel:
+            await self._connect()
+            logger.info("Connection and channel established successfully.")
+
+        # Ensure the message generator is used to add necessary fields like correlation_id
+        corr_id = str(uuid.uuid4())
+        future = self.rpc_manager.create_future_for_rpc(corr_id)
+        logger.debug(f"Future created for RPC with correlation id: {corr_id}")
+
+        # Publish the message as usual
+        await self.publish(routing_key, message, corr_id)
+        logger.info(f"Message published to exchange with routing key: {routing_key}")
+
+        try:
+            # Wait for the response or timeout
+            response = await asyncio.wait_for(future, timeout)
+            logger.info("Response received successfully.")
+            return response
+        except asyncio.TimeoutError:
+            logger.error(f"RPC call timed out after {timeout} seconds.")
+            return None
+        finally:
+            self.rpc_manager.cleanup(corr_id)
+            logger.debug("RPC call cleanup completed.")
+
+    async def stop(self):
+        """Closes the connection."""
+        logger.info("Stopping the publisher...")
+        if self.channel:
+            await self.channel.close()
+        if self.connection:
+            await self.connection.close()
+        logger.info("Publisher stopped successfully.")
 
 
-class MessageNode(IMessageNodeOperations):
-
-    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler] = [], verbosity: int = 0):
+class AsyncMessageNode(IMessageNodeOperations):
+    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler], verbosity: int = 0):
         self.config: MessageNodeConfig = config
+        self.rpc_manager: RPCManager = RPCManager()
+        self.consumer: AsyncConsumer = AsyncConsumer(config, self.rpc_manager, handlers)
+        self.publisher: AsyncPublisher = AsyncPublisher(config, self.rpc_manager)
+        self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         self._msg_generator: MessageGenerator = MessageGenerator(config.name, config.message_version)
         self.shutdown_hooks: list[Callable[[], None]] = []
 
@@ -321,82 +299,41 @@ class MessageNode(IMessageNodeOperations):
         if verbosity > 0:
             logger.setLevel(logging.INFO)
             logger.propagate = True
+            logger.info("Setting logger level to INFO")
         if verbosity > 1:
             pika_logger.setLevel(logging.INFO)
+            logger.info("Setting pika logger level to INFO")
         if verbosity > 2:
             logger.setLevel(logging.DEBUG)
+            logger.info("Setting logger level to DEBUG")
         if verbosity > 3:
             pika_logger.setLevel(logging.DEBUG)
+            logger.info("Setting pika logger level to DEBUG")
 
-        self.consumer: Consumer = Consumer(config, handlers)
-        self.publisher: Publisher = Publisher(config)
+    async def start(self):
+        """Starts the consumer and publisher asynchronously."""
+        await self.consumer.start_consuming()
+        logger.info("Started the Consumer and publisher asynchronously.")
 
-    # Required form for IMessageNodeOperations
+    async def stop(self):
+        """Stops the consumer and publisher asynchronously."""
+        await self.consumer.stop()
+        await self.publisher.stop()
+        logger.info("Stopped the consumer and publisher asynchronously.")
+
+    async def publish_message(self, routing_key: str, message: Message, corr_id: Optional[str] = None):
+        """Publishes a message asynchronously."""
+        await self.publisher.publish(routing_key, message, corr_id)
+
+    async def publish_rpc_message(self, routing_key: str, message: Message, timeout: int = 10) -> Any:
+        """Sends an RPC message and waits for the response."""
+        return await self.publisher.publish_rpc_message(routing_key, message, timeout)
+
     @property
     def msg_generator(self) -> MessageGenerator:
         return self._msg_generator
 
-    # Required form for IMessageNodeOperations
     @msg_generator.setter
     def msg_generator(self, value: MessageGenerator) -> None:
         self._msg_generator = value
-
-    def signal_handler(self, signum, frame):
-        logging.info("SIGINT received, initiating shutdown...")
-        self.stop()
-
-    def start(self) -> None:
-        """Intialize MessageNode and signal handler, and start consumer and producer threads."""
-        signal.signal(signal.SIGINT, self.signal_handler)
-        signal.signal(signal.SIGTERM, self.signal_handler)
-        logger.info(f"Starting {self.config.name}...")
-        logger.info(f"Starting Consumer..")
-        self.consumer.start()
-        logger.info(f"Starting Publisher..")
-        self.publisher.start()
-        self.consumer.ready_event.wait()
-        self.publisher.ready_event.wait()
-
-    def stop(self) -> None:
-        """Stop RMQ consumption and join consumer and producer threads."""
-        try:
-            logger.info("Invoking shutdown hooks...")
-            for hook in self.shutdown_hooks:
-                hook()
-            logger.info("Stopping Consumer...")
-            self.consumer.stop()
-            self.consumer.join()
-            logger.info("Stopping Publisher...")
-            self.publisher.stop()
-            self.publisher.join()
-        except Exception as e:
-            logger.error(f"An error occurred during shutdown: {e}")
-        finally:
-            logger.info(f"{self.config.name} shutdown complete.")
-
-    def publish_message(self, routing_key: str, message: Message, corr_id: Optional[str] = None) -> None:
-        """Publish a message with routing_key to the associated destination exchange."""
-        self.publisher.publish(routing_key, message, corr_id)
-
-    def publish_rpc_message(self, routing_key: str, message: Message, timeout: int = 10) -> Any:
-        """Publish a message with routing_key and correlation id to the associated destination exchange,
-        and receive response of matching correlation id (blocking)."""
-        corr_id = str(uuid.uuid4())
-        response_event = threading.Event()
-        self.consumer.set_event_response(corr_id, response_event, None)
-        self.publisher.publish(routing_key, message, corr_id)
-        logger.info(f"RPC message sent to publish queue with corr_id: {corr_id}")
-
-        # Wait for the response or timeout
-        event_triggered = response_event.wait(timeout=timeout)
-
-        response = None
-        if event_triggered:
-            # Response received before timeout
-            item = self.consumer.get_event_response(corr_id)
-            response = item["response"]
-
-        # Cleanup, even if timeout
-        self.consumer.del_event_response(corr_id)
-
-        return response
+        logger.info("Updated message generator.")

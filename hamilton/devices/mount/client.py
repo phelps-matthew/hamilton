@@ -1,13 +1,9 @@
-import json
-import time
-from typing import Any
+import signal
+import asyncio
+from typing import Any, Optional
 
-import pika
-from pika.channel import Channel
-from pika.spec import Basic
-
-from hamilton.base.message_node import MessageHandler, MessageNode
-from hamilton.base.messages import MessageHandlerType
+from hamilton.base.message_node import AsyncMessageNode, MessageHandler
+from hamilton.base.messages import MessageHandlerType, Message
 from hamilton.common.utils import CustomJSONDecoder
 from hamilton.devices.mount.config import MountClientConfig
 
@@ -16,8 +12,9 @@ class MountTelemetryHandler(MessageHandler):
     def __init__(self):
         super().__init__(MessageHandlerType.TELEMETRY)
 
-    def handle_message(self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes) -> Any:
-        message = json.loads(body, cls=CustomJSONDecoder)
+    async def handle_message(self, message: Message, correlation_id: Optional[str] = None):
+        # Assuming the message handling is now asynchronous
+        print(f"MountTelemetryHandler: Received message body: {message}")
         return message["payload"]["parameters"]
 
 
@@ -27,20 +24,54 @@ class MountClient:
         config: MountClientConfig = MountClientConfig(),
         handlers: list[MessageHandler] = [MountTelemetryHandler()],
     ):
-        self.node = MessageNode(config, handlers)
+        self.node = AsyncMessageNode(config, handlers, verbosity=3)
+
+    async def start(self):
+        await self.node.start()
+
+    async def stop(self):
+        await self.node.stop()
+
+    async def publish_message(self, routing_key: str, message: dict, corr_id: Optional[str] = None):
+        return await self.node.publish_message(routing_key, message, corr_id)
+
+    async def publish_rpc_message(self, routing_key: str, message: dict, timeout: int = 10):
+        return await self.node.publish_rpc_message(routing_key, message, timeout)
 
 
-if __name__ == "__main__":
-    client = MountClient()
+shutdown_event = asyncio.Event()
+
+
+def signal_handler():
+    shutdown_event.set()
+
+
+async def main():
+    # Setup signal handlers for graceful shutdown
+    loop = asyncio.get_running_loop()
+    for signame in ("SIGINT", "SIGTERM"):
+        loop.add_signal_handler(getattr(signal, signame), signal_handler)
+
+    # Application setup
+    config = MountClientConfig()
+    handlers = [MountTelemetryHandler()]
+    client = MountClient(config, handlers)
+
     try:
-        client.node.start()
+        await client.start()
         command = "status"
         parameters = {}
         message = client.node.msg_generator.generate_command(command, parameters)
-        response = client.node.publish_message("observatory.device.mount.command.status", message)
-        print(response)
-        response = client.node.publish_rpc_message("observatory.device.mount.command.status", message)
-        print(response)
 
+        # Publishing a message and waiting for an RPC response
+        #await client.publish_message("observatory.device.mount.command.status", message)
+        response = await client.publish_rpc_message("observatory.device.mount.command.status", message)
+        print(response)
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
     finally:
-        client.node.stop()
+        await client.stop()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

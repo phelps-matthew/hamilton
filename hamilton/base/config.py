@@ -23,7 +23,7 @@ class Exchange:
 
 
 class Config:
-    rabbitmq_server: str = "localhost"
+    rabbitmq_server: str = "amqp://guest:guest@localhost"
     message_version: str = "1.0.0"
     db_command_queue: str = "db_query_commands"
     VHF_LOW: float = 130e6
