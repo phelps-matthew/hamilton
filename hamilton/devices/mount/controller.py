@@ -1,12 +1,12 @@
 import asyncio
-from typing import Optional
 import signal
+from typing import Optional
 
-from hamilton.message_node.interfaces import MessageHandler
-from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.devices.mount.api import ROT2Prog
 from hamilton.devices.mount.config import MountControllerConfig
+from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
+from hamilton.message_node.interfaces import MessageHandler
 
 class MountCommandHandler(MessageHandler):
     def __init__(self, mount_driver: ROT2Prog):
@@ -58,7 +58,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = MountController()
+    controller = MountController(verbosity=2)
 
     try:
         await controller.start()

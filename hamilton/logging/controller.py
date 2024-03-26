@@ -1,17 +1,16 @@
+import asyncio
 import json
 import logging
+import signal
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Optional
 
-import pika
-from pika.channel import Channel
-from pika.spec import Basic
-
-from hamilton.base.message_node import MessageHandler, MessageNode
-from hamilton.base.messages import MessageHandlerType
-from hamilton.common.utils import CustomJSONDecoder, CustomJSONEncoder
+from hamilton.base.messages import Message, MessageHandlerType
+from hamilton.common.utils import CustomJSONEncoder
 from hamilton.logging.config import LogCollectorConfig
-
+from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
+from hamilton.message_node.interfaces import MessageHandler
 
 class LogHandler(MessageHandler):
     """Writes all messages to log file paths based on message type and source hierarchy"""
@@ -24,7 +23,7 @@ class LogHandler(MessageHandler):
         self.backup_count: int = config.backup_count
         self.loggers = {}  # Cache loggers based on path
 
-    def get_logger(self, log_path: Path) -> logging.Logger:
+    async def get_logger(self, log_path: Path) -> logging.Logger:
         if log_path not in self.loggers:
             # Ensure directory exists
             log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -45,12 +44,11 @@ class LogHandler(MessageHandler):
 
         return self.loggers[log_path]
 
-    def write_message(self, message: str, log_path: Path) -> None:
-        logger = self.get_logger(log_path)
+    async def write_message(self, message: str, log_path: Path) -> None:
+        logger = await self.get_logger(log_path)
         logger.info(message)
 
-    def handle_message(self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes) -> None:
-        message = json.loads(body, cls=CustomJSONDecoder)
+    async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> None:
         message_type = message["messageType"]
         source = message["source"]
         message_out = json.dumps(message, cls=CustomJSONEncoder)
@@ -62,21 +60,41 @@ class LogHandler(MessageHandler):
         source_type_log_path = self.root_log_dir / source.lower() / f"{message_type}.log"
 
         # Write messages
-        self.write_message(message_out, all_log_path)
-        self.write_message(message_out, type_log_path)
-        self.write_message(message_out, source_all_log_path)
-        self.write_message(message_out, source_type_log_path)
+        await self.write_message(message_out, all_log_path)
+        await self.write_message(message_out, type_log_path)
+        await self.write_message(message_out, source_all_log_path)
+        await self.write_message(message_out, source_type_log_path)
 
+class LogCollector(AsyncMessageNodeOperator):
+    def __init__(self, config: LogCollectorConfig = None, verbosity: int = 1):
+        if config is None:
+            config = LogCollectorConfig()
+        handlers = [LogHandler(config)]
+        super().__init__(config, handlers, verbosity)
 
-class LogCollector:
-    def __init__(self, config: LogCollectorConfig, handlers: list[MessageHandler]):
-        self.node: MessageNode = MessageNode(config, handlers, verbosity=2)
+shutdown_event = asyncio.Event()
 
+def signal_handler():
+    shutdown_event.set()
+
+async def main():
+    # Setup signal handlers for graceful shutdown
+    loop = asyncio.get_running_loop()
+    for signame in ("SIGINT", "SIGTERM"):
+        loop.add_signal_handler(getattr(signal, signame), signal_handler)
+
+    # Application setup
+    controller = LogCollector()
+
+    try:
+        await controller.start()
+        await shutdown_event.wait()  # Wait for the shutdown signal
+
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+    finally:
+        await controller.stop()
 
 if __name__ == "__main__":
-    config = LogCollectorConfig()
-    handlers = [LogHandler(config)]
-    controller = LogCollector(config, handlers)
-
-    # Will stay up indefinitely as producer and consumer threads are non-daemon and keep the process alive
-    controller.node.start()
+    asyncio.run(main())
