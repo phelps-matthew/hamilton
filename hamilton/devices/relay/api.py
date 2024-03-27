@@ -4,24 +4,27 @@ import logging
 import time
 import random
 
+
+logger = logging.getLogger(__name__)
+
+
 class FTDIBitbangRelay:
     BITMODE_BITBANG = 0x01  # Define bitbang mode value
     BITMODE_RESET = 0x00  # Define reset mode value
 
     def __init__(self, device_id=None, verbosity=0):
         # Use named logger, set handler and formatter if not already set (was necessary to see in journalctl)
-        self.log = logging.getLogger("FTDIBitbangRelay")
-        if not self.log.handlers:
-            handler = logging.StreamHandler()
-            self.log.addHandler(handler)
+        # if not logger.handlers:
+        #    handler = logging.StreamHandler()
+        #    logger.addHandler(handler)
 
-       # Configure logging based on verbosity level
+        # Configure logging based on verbosity level
         if verbosity == 0:
-            self.log.setLevel(logging.WARNING)
+            logger.setLevel(logging.WARNING)
         elif verbosity == 1:
-            self.log.setLevel(logging.INFO)
+            logger.setLevel(logging.INFO)
         elif verbosity >= 2:
-            self.log.setLevel(logging.DEBUG)
+            logger.setLevel(logging.DEBUG)
 
         # Initialize the FTDI device
         self.driver = pylibftdi.Driver()
@@ -32,9 +35,9 @@ class FTDIBitbangRelay:
                 self.dev = pylibftdi.Device()
             self.dev.baudrate = 9600
             self.dev.ftdi_fn.ftdi_set_bitmode(0xFF, self.BITMODE_BITBANG)  # Enable bitbang mode
-            self.log.info("Initialized FTDI device in bitbang mode.")
+            logger.info("Initialized FTDI device in bitbang mode.")
         except pylibftdi.FtdiError as e:
-            self.log.exception("Failed to initialize FTDI device")
+            logger.exception("Failed to initialize FTDI device")
             raise
 
         # Attempt to read the initial state of the device
@@ -54,7 +57,7 @@ class FTDIBitbangRelay:
 
             return state
         except pylibftdi.FtdiError as e:
-            self.log.exception("Failed to read initial state from FTDI device")
+            logger.exception("Failed to read initial state from FTDI device")
             return 0x00  # Default to all relays off if read fails
 
     def get_relay_state(self):
@@ -83,13 +86,13 @@ class FTDIBitbangRelay:
             # Perform a dummy read to ensure the next read is accurate
             self.dev.read(1)
 
-            self.log.debug(f"Relay {relay_num} set to {state.upper()}. Local state: {self.local_state:08b}")
+            logger.debug(f"Relay {relay_num} set to {state.upper()}. Local state: {self.local_state:08b}")
 
         except pylibftdi.FtdiError as e:
-            self.log.exception(f"Failed to set relay {relay_num}")
+            logger.exception(f"Failed to set relay {relay_num}")
 
         except Exception as e:
-            self.log.exception("An unexpected error occurred while setting the relay")
+            logger.exception("An unexpected error occurred while setting the relay")
 
     def test_readback(self):
         try:
@@ -110,18 +113,18 @@ class FTDIBitbangRelay:
 
             # Read back the state
             readback_pattern = ord(self.dev.read(1))
-            self.log.info(f"Written pattern: {test_pattern:08b}")
-            self.log.info(f"Read back pattern: {readback_pattern:08b}")
+            logger.info(f"Written pattern: {test_pattern:08b}")
+            logger.info(f"Read back pattern: {readback_pattern:08b}")
 
             # Check if the read back pattern matches the written pattern
             if test_pattern == readback_pattern:
-                self.log.info("Readback successful, device supports reading pin states.")
+                logger.info("Readback successful, device supports reading pin states.")
             else:
-                self.log.error(
+                logger.error(
                     "Readback failed, device may not support reading pin states in bitbang mode or there's a timing issue."
                 )
         except pylibftdi.FtdiError as e:
-            self.log.exception("An error occurred during the readback test")
+            logger.exception("An error occurred during the readback test")
 
     def close(self):
         try:
@@ -129,9 +132,9 @@ class FTDIBitbangRelay:
             self.dev.write(bytes([0]))
             self.dev.ftdi_fn.ftdi_set_bitmode(0x00, self.BITMODE_RESET)  # Disable bitbang mode, back to reset mode
             self.dev.close()
-            self.log.info("Closed FTDI device")
+            logger.info("Closed FTDI device")
         except pylibftdi.FtdiError as e:
-            self.log.exception("Failed to close FTDI device")
+            logger.exception("Failed to close FTDI device")
 
 
 def main():
@@ -157,5 +160,5 @@ def main():
 
 
 if __name__ == "__main__":
-    #logging.basicConfig(filename="relay_control.log", level=logging.DEBUG)
+    # logging.basicConfig(filename="relay_control.log", level=logging.DEBUG)
     main()

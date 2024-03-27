@@ -1,20 +1,15 @@
-import json
-from typing import Any
+import asyncio
+import signal
+from typing import Optional
 import logging
 
-import pika
-from pika.channel import Channel
-from pika.spec import Basic
-
-from hamilton.base.message_node import MessageHandler, MessageNode
-from hamilton.base.messages import MessageHandlerType
-from hamilton.common.utils import CustomJSONDecoder
-from hamilton.devices.relay.api import FTDIBitbangRelay
+from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.devices.relay.config import RelayControllerConfig
+from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
+from hamilton.message_node.interfaces import MessageHandler
+from hamilton.devices.relay.api import FTDIBitbangRelay
 
-# Setup basic logging and create a named logger for the this module
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
-logger = logging.getLogger("relay_controller")
+logger = logging.getLogger(__name__)
 
 
 class RelayCommandHandler(MessageHandler):
@@ -24,7 +19,7 @@ class RelayCommandHandler(MessageHandler):
         self.relay = relay_driver
         self.id_map = {"uhf_bias": 1, "vhf_bias": 2, "vhf_pol": 3, "uhf_pol": 4}
 
-    def shutdown_relay(self):
+    async def shutdown_relay(self):
         self.relay.close()
 
     def parse_state_to_dict(self, state):
@@ -35,10 +30,8 @@ class RelayCommandHandler(MessageHandler):
             state_dict[name] = "on" if state & (1 << i) else "off"
         return state_dict
 
-    def handle_message(self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes) -> Any:
+    async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> None:
         response = None
-        message = json.loads(body, cls=CustomJSONDecoder)
-        corr_id = properties.correlation_id
         command = message["payload"]["commandType"]
         parameters = message["payload"]["parameters"]
 
@@ -59,21 +52,48 @@ class RelayCommandHandler(MessageHandler):
 
         if response:
             telemetry_msg = self.node_operations.msg_generator.generate_telemetry("status", response)
-            self.node_operations.publish_message("observatory.device.relay.telemetry.status", telemetry_msg, corr_id)
+            await self.node_operations.publish_message(
+                "observatory.device.relay.telemetry.status", telemetry_msg, correlation_id
+            )
 
         return response
 
 
-class RelayController:
-    def __init__(self, config: RelayControllerConfig, handlers: list[MessageHandler]):
-        self.node: MessageNode = MessageNode(config, handlers, verbosity=3)
+class RelayController(AsyncMessageNodeOperator):
+    def __init__(self, config: RelayControllerConfig = None, verbosity: int = 1):
+        if config is None:
+            config = RelayControllerConfig()
+        relay_driver = FTDIBitbangRelay(device_id=config.DEVICE_ID, verbosity=verbosity)
+        handlers = [RelayCommandHandler(relay_driver)]
+        super().__init__(config, handlers, verbosity)
+
+
+shutdown_event = asyncio.Event()
+
+
+def signal_handler():
+    shutdown_event.set()
+
+
+async def main():
+    # Setup signal handlers for graceful shutdown
+    loop = asyncio.get_running_loop()
+    for signame in ("SIGINT", "SIGTERM"):
+        loop.add_signal_handler(getattr(signal, signame), signal_handler)
+
+    # Application setup
+    controller = RelayController(verbosity=2)
+
+    try:
+        await controller.start()
+        await shutdown_event.wait()  # Wait for the shutdown signal
+
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+    finally:
+        await controller.stop()
 
 
 if __name__ == "__main__":
-    config = RelayControllerConfig()
-    relay_driver = FTDIBitbangRelay(device_id=config.DEVICE_ID, verbosity=2)
-    handlers = [RelayCommandHandler(relay_driver)]
-    controller = RelayController(config, handlers)
-
-    # Will stay up indefinitely as producer and consumer threads are non-daemon and keep the process alive
-    controller.node.start()
+    asyncio.run(main())

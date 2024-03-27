@@ -84,7 +84,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = LogCollector()
+    controller = LogCollector(verbosity=1)
 
     try:
         await controller.start()

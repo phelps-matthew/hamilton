@@ -1,14 +1,10 @@
-import json
-import time
-from typing import Any
+import signal
+import asyncio
+from typing import Optional
 
-import pika
-from pika.channel import Channel
-from pika.spec import Basic
-
-from hamilton.base.message_node import MessageHandler, MessageNode
-from hamilton.base.messages import MessageHandlerType
-from hamilton.common.utils import CustomJSONDecoder
+from hamilton.message_node.interfaces import MessageHandler
+from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
+from hamilton.base.messages import MessageHandlerType, Message
 from hamilton.devices.relay.config import RelayClientConfig
 
 
@@ -16,31 +12,53 @@ class RelayTelemetryHandler(MessageHandler):
     def __init__(self):
         super().__init__(MessageHandlerType.TELEMETRY)
 
-    def handle_message(self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes) -> Any:
-        message = json.loads(body, cls=CustomJSONDecoder)
+    async def handle_message(self, message: Message, correlation_id: Optional[str] = None):
         return message["payload"]["parameters"]
 
 
-class RelayClient:
-    def __init__(
-        self,
-        config: RelayClientConfig  = RelayClientConfig(),
-        handlers: list[MessageHandler] = [RelayTelemetryHandler()],
-    ):
-        self.node = MessageNode(config, handlers, verbosity=0)
+class RelayClient(AsyncMessageNodeOperator):
+    def __init__(self, config=None, verbosity=1):
+        if config is None:
+            config = RelayClientConfig()
+        handlers = [RelayTelemetryHandler()]
+        super().__init__(config, handlers, verbosity)
+
+
+shutdown_event = asyncio.Event()
+
+
+def signal_handler():
+    shutdown_event.set()
+
+
+async def main():
+    # Setup signal handlers for graceful shutdown
+    loop = asyncio.get_running_loop()
+    for signame in ("SIGINT", "SIGTERM"):
+        loop.add_signal_handler(getattr(signal, signame), signal_handler)
+
+    # Application setup
+    client = RelayClient(verbosity=1)
+
+    try:
+        await client.start()
+        command = "status"
+        parameters = {}
+        message = client.msg_generator.generate_command(command, parameters)
+
+        # Publish message
+        await client.publish_message("observatory.device.relay.command.status", message)
+
+        # Publish RPC message and await response
+        response = await client.publish_rpc_message("observatory.device.relay.command.status", message)
+        print(response)
+
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+    finally:
+        await client.stop()
 
 
 if __name__ == "__main__":
-    client = RelayClient()
-    try:
-        client.node.start()
-        command = "status"
-        parameters = {}
-        message = client.node.msg_generator.generate_command(command, parameters)
-        response = client.node.publish_message("observatory.device.relay.command.status", message)
-        print(response)
-        response = client.node.publish_rpc_message("observatory.device.relay.command.status", message)
-        print(response)
-
-    finally:
-        client.node.stop()
+    asyncio.run(main())

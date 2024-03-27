@@ -23,6 +23,7 @@ class AsyncConsumer:
         self.connection: aio_pika.Connection = None
         self.channel: aio_pika.Channel = None
         self.rpc_manager: RPCManager = rpc_manager
+        self.queues: list[aio_pika.Queue] = []
         self.handlers = handlers
         self.handlers_map: dict[MessageHandlerType, list[MessageHandler]] = {}
 
@@ -53,10 +54,11 @@ class AsyncConsumer:
             queue_name = f"{binding.exchange}_{self.config.name}"
             queue = await self.channel.declare_queue(queue_name)
             logger.info(f"Declared queue: {queue_name}")
+            self.queues.append(queue)
             for routing_key in binding.routing_keys:
                 await queue.bind(binding.exchange, routing_key)
                 logger.debug(
-                    f"Bound queue: {queue_name} to exchange: {binding.exchange} with routing key: {routing_key}"
+                    f"Bound to queue: {queue_name} with exchange: {binding.exchange} and routing key: {routing_key}"
                 )
 
     async def start_consuming(self):
@@ -65,12 +67,10 @@ class AsyncConsumer:
         self._build_handlers_map()
         await self._declare_exchanges()
         await self._setup_bindings()
-        # Setup consumer
-        queue_name = f"{self.config.bindings[0].exchange}_{self.config.name}"
-        queue = await self.channel.get_queue(queue_name)
-        logger.debug(f"Queue {queue_name} obtained.")
-        # This registers an on-going consumption task with the event loop and immediately returns
-        await queue.consume(self._on_message_received)
+        # Start consuming from all queues
+        for queue in self.queues:
+            # This registers an on-going consumption task for each queue
+            await queue.consume(self._on_message_received)
         logger.info("Consumer setup complete.")
 
     async def _on_message_received(self, message: IncomingMessage):
