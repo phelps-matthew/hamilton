@@ -30,7 +30,7 @@ class AsyncMessageNodeOperator:
         Publish a RPC message to the message node asynchronously and wait for the response.
     """
 
-    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler], verbosity: int = 2):
+    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler] = [], verbosity: int = 2):
         self.node = AsyncMessageNode(config, handlers, verbosity)
         self.config = config
 

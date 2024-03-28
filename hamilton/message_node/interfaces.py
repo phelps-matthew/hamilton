@@ -26,6 +26,7 @@ class MessageHandler(ABC):
     def __init__(self, message_type: MessageHandlerType = MessageHandlerType.ALL, serve_as_rpc: bool = False):
         self.message_type: MessageHandlerType = message_type
         self.node_operations: IMessageNodeOperations = None
+        self.startup_hooks: list[Callable[[], None]] = []
         self.shutdown_hooks: list[Callable[[], None]] = []
 
     def set_node_operations(self, node_operations: IMessageNodeOperations) -> None:

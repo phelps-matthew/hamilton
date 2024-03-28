@@ -20,7 +20,6 @@ from hamilton.message_node.rpc_manager import RPCManager
 
 
 # Setup basic logging and create a named logger for the this module
-logging.basicConfig(level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger(__name__)
 aio_pika_logger = logging.getLogger("aio_pika")
 
@@ -32,11 +31,13 @@ class AsyncMessageNode(IMessageNodeOperations):
         self.consumer: AsyncConsumer = AsyncConsumer(config, self.rpc_manager, handlers, verbosity)
         self.publisher: AsyncProducer = AsyncProducer(config, self.rpc_manager, verbosity)
         self._msg_generator: MessageGenerator = MessageGenerator(config.name, config.message_version)
+        self.startup_hooks: list[Callable[[], None]] = []
         self.shutdown_hooks: list[Callable[[], None]] = []
 
         # Link MessageNode to handlers' node operations interface and register external shutdown hooks
         for handler in handlers:
             handler.set_node_operations(self)
+            self.startup_hooks.extend(handler.startup_hooks)
             self.shutdown_hooks.extend(handler.shutdown_hooks)
 
         if verbosity == 0:
@@ -59,6 +60,10 @@ class AsyncMessageNode(IMessageNodeOperations):
         """Starts the consumer and publisher asynchronously."""
         await self.consumer.start_consuming()
         logger.info("Started the consumer and publisher asynchronously.")
+        logger.info("Invoking startup hooks...")
+        for hook in self.startup_hooks:
+            await hook()
+        logger.info(f"{self.config.name} startup complete.")
 
     async def stop(self):
         """Stops the consumer and publisher asynchronously."""
