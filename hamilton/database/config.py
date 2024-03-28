@@ -2,7 +2,7 @@ from hamilton.base.config import DBConfig, Exchange, Binding, Publishing
 
 
 class DBUpdaterConfig(DBConfig):
-    name = "database_controller"
+    name = "database_updater"
     exchanges = [
         Exchange(name="database", type="topic", durable=True, auto_delete=False),
     ]
