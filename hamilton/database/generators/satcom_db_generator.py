@@ -15,6 +15,7 @@ import pandas as pd
 from hamilton.database.config import DBUpdaterConfig
 from hamilton.database.generators.je9pel_generator import JE9PELGenerator
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,7 +26,7 @@ class SatcomDBGenerator:
         self.transmitters_url = config.SATNOGS_TRANSMITTERS_URL
         self.satellites_url = config.SATNOGS_SATELLITES_URL
         self.tle_url = config.SATNOGS_TLE_URL
-        self.db_path = Path(self.config.db_path).expanduser()
+        self.db_path = Path(self.config.json_db_path).expanduser()
         self.cache_dir = self.db_path.parent / "cache"
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -43,7 +44,7 @@ class SatcomDBGenerator:
             return json.load(f)
 
     def write_json_to_file(self, data, file_path):
-        logger.info(f"Writing {Path(file_path).absolute()}")
+        logger.debug(f"Writing {Path(file_path).absolute()}")
         with Path(file_path).open("w") as file:
             json.dump(data, file, indent=4)
 
@@ -64,32 +65,32 @@ class SatcomDBGenerator:
 
     def fetch(self, use_cache=False):
         if use_cache:
-            logger.info("Referencing local cache.")
+            logger.debug("Referencing local cache.")
 
-            logger.info("Fetching TLE data.")
+            logger.debug("Fetching TLE data.")
             tle_data = self.load_json(self.cache_dir / "tle.json")
 
-            logger.info("Fetching satellite data.")
-            logger.info("Fetching satellite data.")
+            logger.debug("Fetching satellite data.")
+            logger.debug("Fetching satellite data.")
             satellites_data = self.load_json(self.cache_dir / "satellites.json")
 
-            logger.info("Fetching transmitter data.")
+            logger.debug("Fetching transmitter data.")
             transmitters_data = self.load_json(self.cache_dir / "transmitters.json")
 
         else:
-            logger.info("Creating local cache.")
+            logger.debug("Creating local cache.")
             files_to_remove = ["tle.json", "satellites.json", "transmitters.json"]
             self.cache_dir = self.initialize_cache_directory(files_to_remove=files_to_remove)
 
-            logger.info("Fetching TLE data.")
+            logger.debug("Fetching TLE data.")
             tle_data = self.download_json_data(self.tle_url)
             self.write_json_to_file(tle_data, self.cache_dir / "tle.json")
 
-            logger.info("Fetching satellite data.")
+            logger.debug("Fetching satellite data.")
             satellites_data = self.download_json_data(self.satellites_url)
             self.write_json_to_file(satellites_data, self.cache_dir / "satellites.json")
 
-            logger.info("Fetching transmitter data.")
+            logger.debug("Fetching transmitter data.")
             transmitters_data = self.download_json_data(self.transmitters_url)
             self.write_json_to_file(transmitters_data, self.cache_dir / "transmitters.json")
 
@@ -132,23 +133,23 @@ class SatcomDBGenerator:
         return _is_nonempty
 
     def validate(self, tle_data, satellite_data, transmitter_data):
-        logger.info("Validating 1:1 TLE:sat_UUID.")
+        logger.debug("Validating 1:1 TLE:sat_UUID.")
         assert self.is_value_unique(tle_data, "sat_id")
 
-        logger.info("Validating non-empty sat_UUID.")
+        logger.debug("Validating non-empty sat_UUID.")
         assert self.is_nonempty(satellite_data, "sat_id")
 
-        logger.info("Validating unique sat_UUID.")
+        logger.debug("Validating unique sat_UUID.")
         assert self.is_value_unique(satellite_data, "sat_id")
 
-        logger.info("Validating 1:many map of sat_UUID:transmitter.")
+        logger.debug("Validating 1:many map of sat_UUID:transmitter.")
         assert not self.is_value_unique(transmitter_data, "sat_id")
 
     def validate_norad_ids(self, data):
-        logger.info("Validating nonempty NORAD satellites.")
+        logger.debug("Validating nonempty NORAD satellites.")
         assert self.is_nonempty(data, "norad_cat_id")
 
-        logger.info("Validating unique NORAD satellites.")
+        logger.debug("Validating unique NORAD satellites.")
         assert self.is_value_unique(data, "norad_cat_id")
 
     ## Data Transformation ##
@@ -203,7 +204,7 @@ class SatcomDBGenerator:
 
         # Merge TLE DataFrame with satellite DataFrame
         # This will only select satellites that have an associated TLE.
-        logger.info("Merging TLE's with satellites based on sat_UUID.")
+        logger.debug("Merging TLE's with satellites based on sat_UUID.")
         df = pd.merge(df_tle, df_satellites, on="sat_id")
 
         # Validate and merge norad_cat_ids.
@@ -221,7 +222,7 @@ class SatcomDBGenerator:
         df = df.drop("image", axis=1)
 
         # Filter out any dead or satellits that have re-entered the atmosphere.
-        logger.info("Filtering dead or re-entered satellites.")
+        logger.debug("Filtering dead or re-entered satellites.")
         df = df[df["status"] == "alive"]
 
         # Group tx dataframe rows by `sat_id` and convert each group to a list of dictionaries.
@@ -236,16 +237,16 @@ class SatcomDBGenerator:
         df_transmitters_2 = df_transmitters_2.rename(columns={0: "transmitters"})
 
         # Select `sat_id`s that exist in both (tle+sat) dataframe and tx dataframe.
-        logger.info("Merging TLE + Satellite dataframe with transmitter dataframe.")
+        logger.debug("Merging TLE + Satellite dataframe with transmitter dataframe.")
         df_merged = pd.merge(df, df_transmitters_2, on="sat_id")
 
         # Explode DataFrame and prune based on prescribed frequency bands.
-        logger.info("Filtering database by frequency bands.")
+        logger.debug("Filtering database by frequency bands.")
         df_final = self.filter_by_transmitter_frequency(df_merged)
 
         # Serialize dataframe to json; this will properly and, among other methods, most straightforwardly
         # convert NaN's to nulls.
-        logger.info("Formatting database to normalized dictionary form.")
+        logger.debug("Formatting database to normalized dictionary form.")
         data_json = df_final.to_json(orient="records")
 
         # To (lazily) fix the foward slashes added from DataFrame -> json, we load as dict and *then* write out.
@@ -257,7 +258,7 @@ class SatcomDBGenerator:
 
     def format(self, data) -> dict:
         """Re-index the dictionary by satnogs 'norad_cat_id' as the primary key"""
-        logger.info("Reindexing data to use norad_cat_id as primary key.")
+        logger.debug("Reindexing data to use norad_cat_id as primary key.")
         satcom_db = {}
         for d in data:
             # key = d["sat_id"]
@@ -287,8 +288,8 @@ class SatcomDBGenerator:
 
     ## Entrypoint ##
 
-    def generate_db(self, use_cache=False):
-        logger.info("Starting SATCOM database generation.")
+    def generate_db(self, use_cache: bool =False) -> dict:
+        logger.debug("Starting SATCOM database generation.")
 
         # Fetch
         tle_data, satellite_data, transmitter_data = self.fetch(use_cache)
@@ -307,25 +308,27 @@ class SatcomDBGenerator:
 
         # Merge with JE9PEL
         je9pel_data = self.je9pel.generate_db(use_cache=use_cache)
-        # import ipdb; ipdb.set_trace()
         data = self.merge_with_je9pel(data, je9pel_data)
-
-        # Export as json
-        self.write_json_to_file(data, self.db_path)
-
-        logger.info(f"Total number of observable satellites: {len(data)}")
-        logger.info("SATCOM database generation complete.")
+        logger.debug(f"Total number of observable satellites: {len(data)}")
+        logger.debug("SATCOM database generation complete.")
 
         return data
 
+    def write_db(self, data: dict) -> None:
+        # Export as json
+        self.write_json_to_file(data, self.db_path)
+
     def get_cached_db(self):
-        logger.info("Fetching cached SATCOM database.")
+        logger.debug("Fetching cached SATCOM database.")
         with open(self.db_path) as f:
             d = json.load(f)
         return d
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
     je9pel = JE9PELGenerator(DBUpdaterConfig)
     generator = SatcomDBGenerator(DBUpdaterConfig, je9pel)
-    generator.generate_db(use_cache=False)
+    data = generator.generate_db(use_cache=False)
+    generator.write_db(data)
+

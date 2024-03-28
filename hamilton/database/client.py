@@ -8,20 +8,43 @@ from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOp
 from hamilton.message_node.interfaces import MessageHandler
 
 
-class DBQueryTelemetryHandler(MessageHandler):
+class DBTelemetryHandler(MessageHandler):
     def __init__(self):
         super().__init__(MessageHandlerType.TELEMETRY)
+        self.base_routing_key = "observatory.database.command"
 
     async def handle_message(self, message: Message, correlation_id: Optional[str] = None):
         return message["payload"]["parameters"]
 
 
-class DBQueryClient(AsyncMessageNodeOperator):
+class DBClient(AsyncMessageNodeOperator):
     def __init__(self, config=None, verbosity=0):
         if config is None:
             config = DBClientConfig()
-        handlers = [DBQueryTelemetryHandler()]
+        handlers = [DBTelemetryHandler()]
         super().__init__(config, handlers, verbosity)
+
+
+    async def _publish_command(self, command: str, parameters: dict) -> dict:
+        routing_key = f"{self.base_routing_key}.{command}"
+        message = self.msg_generator.generate_command(command, parameters)
+        response = await self.publish_rpc_message(routing_key, message)
+        return response
+
+    async def query_record(self, sat_id: str) -> dict:
+        command = "query"
+        parameters = {"sat_id": sat_id}
+        return await self._publish_command(command, parameters)
+
+    async def get_satellite_ids(self) -> list:
+        command = "get_satellite_ids"
+        parameters = {}
+        return await self._publish_command(command, parameters)
+
+    async def get_active_downlink_satellite_ids(self) -> list:
+        command = "get_active_downlink_satellite_ids"
+        parameters = {}
+        return await self._publish_command(command, parameters)
 
 
 shutdown_event = asyncio.Event()
@@ -38,29 +61,18 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    client = DBQueryClient(verbosity=1)
+    client = DBClient(verbosity=1)
 
     try:
         await client.start()
 
-        command = "query"
-        parameters = {"sat_id": "33499"}
-        message = client.msg_generator.generate_command(command, parameters)
-        response = await client.publish_rpc_message("observatory.database.command.query_record", message)
+        response = await client.query_record(sat_id="33499")
         print(f"Response: {response}")
 
-        command = "get_satellite_ids"
-        parameters = {}
-        message = client.msg_generator.generate_command(command, parameters)
-        response = await client.publish_rpc_message("observatory.database.command.get_satellite_ids", message)
+        response = await client.get_satellite_ids()
         print(f"Response: {response}")
 
-        command = "get_active_downlink_satellite_ids"
-        parameters = {}
-        message = client.msg_generator.generate_command(command, parameters)
-        response = await client.publish_rpc_message(
-            "observatory.database.command.get_active_downlink_satellite_ids", message
-        )
+        response = await client.get_active_downlink_satellite_ids()
         print(f"Response: {response}")
         print(f"Response Items: {len(response)}")
 

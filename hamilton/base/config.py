@@ -44,3 +44,10 @@ class LogConfig(MessageNodeConfig):
     root_log_dir: str = "~/hamilton/log/"
     max_log_size: int = 10 * 1024 * 1024  # 10 MB
     backup_count: int = 3
+
+class DBConfig(MessageNodeConfig):
+    root_log_dir: str = "~/hamilton/db/"
+    json_db_path: str = "~/hamilton/db/satcom.json"
+    mongo_uri: str = "mongodb://localhost:27017"
+    mongo_db_name: str = "hamilton"
+    mongo_collection_name: str = "satcom"

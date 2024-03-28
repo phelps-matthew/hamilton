@@ -1,7 +1,5 @@
 """Both controller and updater acquire and release locks for thread-safe file reading/writing"""
 
-import json
-from threading import Lock
 from typing import Optional
 import asyncio
 import signal
@@ -10,48 +8,46 @@ from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.message_node.interfaces import MessageHandler
 from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.database.config import DBControllerConfig
+from motor.motor_asyncio import AsyncIOMotorClient
+from hamilton.database.setup_db import setup_and_index_db
 
 
 class DBControllerCommandHandler(MessageHandler):
     def __init__(self, config: DBControllerConfig):
         super().__init__(message_type=MessageHandlerType.COMMAND)
         self.config = config
-        self.db_lock = Lock()
+        self.db_client = AsyncIOMotorClient(self.config.mongo_uri)
+        self.db = self.db_client[self.config.mongo_db_name]
+        self.startup_hooks = [self._setup_and_index_db]
+        self.shutdown_hooks = [self._stop_db_client]
+        self.routing_key_base = "observatory.database.command"
+
+    async def _setup_and_index_db(self):
+        self.db_client, self.db = await setup_and_index_db()
+
+    async def _stop_db_client(self):
+        self.db_client.close()
 
     async def query_record(self, key) -> dict:
-        with self.db_lock:
-            with open(self.config.DB_PATH, "r") as file:
-                data = json.load(file)
-                return data.get(key, {})
+        return await self.db[self.config.mongo_collection_name].find_one({"norad_cat_id": int(key)})
 
     async def get_satellite_ids(self) -> list:
-        with self.db_lock:
-            with open(self.config.DB_PATH, "r") as file:
-                data = json.load(file)
-                return list(data.keys())
+        ids = await self.db[self.config.mongo_collection_name].distinct("norad_cat_id")
+        return [str(id) for id in ids]
 
     async def get_active_downlink_satellite_ids(self) -> list:
-        """Return list of sat ids with at least one JE9PEL active downlink"""
-        with self.db_lock:
-            with open(self.config.DB_PATH, "r") as file:
-                data = json.load(file)
-                active_sat_ids = []
-                for k, d in data.items():
-                    is_active = False
-                    if d["je9pel"] is not None:
-                        for link in d["je9pel"]["downlink"]:
-                            if link["active"]:
-                                is_active = True
-                    if is_active:
-                        active_sat_ids.append(k)
-                return active_sat_ids
+        cursor = self.db[self.config.mongo_collection_name].find(
+            {"je9pel.downlink.active": True},  # Query for active downlinks in JE9PEL data
+            {"norad_cat_id": 1, "_id": 0},  # Projection
+        )
+        ids = [str(doc["norad_cat_id"]) async for doc in cursor]
+        return ids
 
     async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> None:
         response = None
+        telemetry_type = None
         command = message["payload"]["commandType"]
         parameters = message["payload"]["parameters"]
-        routing_key_base = "observatory.database.telemetry."
-        telemetry_type = None
 
         if command == "query":
             telemetry_type = "record"
@@ -64,14 +60,15 @@ class DBControllerCommandHandler(MessageHandler):
             telemetry_type = "satellite_ids"
             response = await self.get_active_downlink_satellite_ids()
 
-        if response and telemetry_type:
-            routing_key = routing_key_base + telemetry_type
+        if telemetry_type:
+            routing_key = f"{self.routing_key_base}.{telemetry_type}"
+            response = {} if response is None else response
             telemetry_msg = self.node_operations.msg_generator.generate_telemetry(telemetry_type, response)
             await self.node_operations.publish_message(routing_key, telemetry_msg, correlation_id)
 
 
 class DBController(AsyncMessageNodeOperator):
-    def __init__(self, config: DBControllerConfig = None, verbosity: int = 1):
+    def __init__(self, config: DBControllerConfig = None, verbosity: int = 2):
         if config is None:
             config = DBControllerConfig()
         handlers = [DBControllerCommandHandler(config)]
@@ -92,7 +89,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = DBController(verbosity=3)
+    controller = DBController(verbosity=2)
 
     try:
         await controller.start()

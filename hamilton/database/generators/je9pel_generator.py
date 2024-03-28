@@ -19,10 +19,11 @@ from hamilton.database.config import DBUpdaterConfig
 
 logger = logging.getLogger(__name__)
 
+
 class JE9PELGenerator:
-    def __init__(self, config: DBUpdaterConfig, logger=None):
+    def __init__(self, config: DBUpdaterConfig):
         self.config = config
-        self.db_path = Path(self.config.db_path).expanduser()
+        self.db_path = Path(self.config.json_db_path).expanduser()
         self.cache_dir = self.db_path.parent / "cache"
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
