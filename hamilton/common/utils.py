@@ -1,6 +1,7 @@
 import json
 import numpy as np
 from datetime import datetime
+from bson import ObjectId
 
 
 class CustomJSONEncoder(json.JSONEncoder):
@@ -11,6 +12,9 @@ class CustomJSONEncoder(json.JSONEncoder):
         elif isinstance(obj, datetime):
             # Format datetime objects as strings
             return obj.isoformat()
+        elif isinstance(obj, ObjectId):
+            return str(obj)
+        return json.JSONEncoder.default(self, o)
         # Let the base class default method raise the TypeError
         return json.JSONEncoder.default(self, obj)
 

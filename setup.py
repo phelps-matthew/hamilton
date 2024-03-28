@@ -11,6 +11,8 @@ setuptools.setup(
         "pandas",
         "dash",
         "dash-bootstrap-components",
-        "skyfield"
+        "skyfield",
+        "pytest-asyncio",
     ]
 )
+

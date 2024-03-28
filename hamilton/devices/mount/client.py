@@ -1,11 +1,11 @@
-import signal
 import asyncio
+import signal
 from typing import Optional
 
-from hamilton.message_node.interfaces import MessageHandler
-from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.base.messages import MessageHandlerType, Message
 from hamilton.devices.mount.config import MountClientConfig
+from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
+from hamilton.message_node.interfaces import MessageHandler
 
 
 class MountTelemetryHandler(MessageHandler):
