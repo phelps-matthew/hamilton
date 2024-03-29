@@ -11,7 +11,6 @@ from hamilton.message_node.interfaces import MessageHandler
 class DBTelemetryHandler(MessageHandler):
     def __init__(self):
         super().__init__(MessageHandlerType.TELEMETRY)
-        self.base_routing_key = "observatory.database.command"
 
     async def handle_message(self, message: Message, correlation_id: Optional[str] = None):
         return message["payload"]["parameters"]
@@ -23,16 +22,16 @@ class DBClient(AsyncMessageNodeOperator):
             config = DBClientConfig()
         handlers = [DBTelemetryHandler()]
         super().__init__(config, handlers, verbosity)
-
+        self.routing_key_base = "observatory.database.command"
 
     async def _publish_command(self, command: str, parameters: dict) -> dict:
-        routing_key = f"{self.base_routing_key}.{command}"
+        routing_key = f"{self.routing_key_base}.{command}"
         message = self.msg_generator.generate_command(command, parameters)
         response = await self.publish_rpc_message(routing_key, message)
         return response
 
     async def query_record(self, sat_id: str) -> dict:
-        command = "query"
+        command = "query_record"
         parameters = {"sat_id": sat_id}
         return await self._publish_command(command, parameters)
 

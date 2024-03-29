@@ -20,7 +20,7 @@ class DBControllerCommandHandler(MessageHandler):
         self.db = self.db_client[self.config.mongo_db_name]
         self.startup_hooks = [self._setup_and_index_db]
         self.shutdown_hooks = [self._stop_db_client]
-        self.routing_key_base = "observatory.database.command"
+        self.routing_key_base = "observatory.database.telemetry"
 
     async def _setup_and_index_db(self):
         self.db_client, self.db = await setup_and_index_db()
@@ -49,7 +49,7 @@ class DBControllerCommandHandler(MessageHandler):
         command = message["payload"]["commandType"]
         parameters = message["payload"]["parameters"]
 
-        if command == "query":
+        if command == "query_record":
             telemetry_type = "record"
             sat_id = parameters.get("sat_id")
             response = await self.query_record(sat_id)
