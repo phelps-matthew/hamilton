@@ -1,14 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from hamilton.database.config import DBUpdaterConfig
-import logging
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
-
-
-# async def init_db():
-#    client = AsyncIOMotorClient(DBConfig.mongo_uri)
-#    db = client[DBConfig.mongo_db_name]
-#    await db[DBConfig.mongo_collection_name].create_index("norad_cat_id", unique=True)
 
 
 async def setup_db():
