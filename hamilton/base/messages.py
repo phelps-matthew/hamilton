@@ -48,7 +48,7 @@ class MessageGenerator:
         self.version = version
 
     def _get_timestamp(self) -> str:
-        return datetime.now(UTC).isoformat()
+        return datetime.now().isoformat()
 
     def generate_message(self, message_type: MessageType, payload: Payload) -> Message:
         message_schema: Message = {
