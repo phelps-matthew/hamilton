@@ -8,6 +8,7 @@ from pika.spec import Basic
 
 from hamilton.astrodynamics.config import AstrodynamicsClientConfig
 from hamilton.base.message_node import MessageHandler, MessageNode
+from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.base.messages import MessageHandlerType
 from hamilton.common.utils import CustomJSONDecoder
 
@@ -27,7 +28,7 @@ class AstrodynamicsClient:
         config: AstrodynamicsClientConfig = AstrodynamicsClientConfig(),
         handlers: list[MessageHandler] = [AstrodynamicsTelemetryHandler()],
     ):
-        self.node: MessageNode = MessageNode(config, handlers, verbosity=0)
+        self.node: MessageNode = MessageNode(config, handlers)
         self.base_routing_key: str = "observatory.astrodynamics.command."
 
     def publish_message(self, command: str, parameters: dict[str, Any], rpc: bool = True):

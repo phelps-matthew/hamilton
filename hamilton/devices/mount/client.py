@@ -17,11 +17,11 @@ class MountTelemetryHandler(MessageHandler):
 
 
 class MountClient(AsyncMessageNodeOperator):
-    def __init__(self, config=None, verbosity=0):
+    def __init__(self, config=None):
         if config is None:
             config = MountClientConfig()
         handlers = [MountTelemetryHandler()]
-        super().__init__(config, handlers, verbosity)
+        super().__init__(config, handlers)
 
 
 shutdown_event = asyncio.Event()
@@ -38,7 +38,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    client = MountClient(verbosity=1)
+    client = MountClient()
 
     try:
         await client.start()

@@ -12,20 +12,7 @@ class FTDIBitbangRelay:
     BITMODE_BITBANG = 0x01  # Define bitbang mode value
     BITMODE_RESET = 0x00  # Define reset mode value
 
-    def __init__(self, device_id=None, verbosity=0):
-        # Use named logger, set handler and formatter if not already set (was necessary to see in journalctl)
-        # if not logger.handlers:
-        #    handler = logging.StreamHandler()
-        #    logger.addHandler(handler)
-
-        # Configure logging based on verbosity level
-        if verbosity == 0:
-            logger.setLevel(logging.WARNING)
-        elif verbosity == 1:
-            logger.setLevel(logging.INFO)
-        elif verbosity >= 2:
-            logger.setLevel(logging.DEBUG)
-
+    def __init__(self, device_id=None):
         # Initialize the FTDI device
         self.driver = pylibftdi.Driver()
         try:
@@ -142,12 +129,9 @@ def main():
     parser.add_argument("relay_num", type=int, choices=range(1, 5), help="Relay number (1-4)")
     parser.add_argument("state", choices=["on", "off"], help='Relay state to set ("on" or "off")')
     parser.add_argument("-s", "--status", action="store_true", help="Get the status of the relay")
-    parser.add_argument(
-        "-v", "--verbose", action="count", default=0, help="Increase output verbosity (use -vv for debug level)"
-    )
     args = parser.parse_args()
 
-    relay = FTDIBitbangRelay(verbosity=args.verbose)
+    relay = FTDIBitbangRelay()
     if args.status:
         print(f"Current Relay State: {relay.get_relay_state():08b}")
     else:

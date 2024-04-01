@@ -15,8 +15,6 @@ class AsyncMessageNodeOperator:
         The configuration for the message node.
     handlers : list[MessageHandler]
         The list of message handlers.
-    verbosity : int, optional
-        The verbosity level, defaults to 2.
 
     Methods
     -------

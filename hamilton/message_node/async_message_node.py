@@ -19,9 +19,7 @@ from hamilton.message_node.interfaces import IMessageNodeOperations, MessageHand
 from hamilton.message_node.rpc_manager import RPCManager
 
 
-# Setup basic logging and create a named logger for the this module
 logger = logging.getLogger(__name__)
-# aio_pika_logger = logging.getLogger("aio_pika")
 
 
 class AsyncMessageNode(IMessageNodeOperations):

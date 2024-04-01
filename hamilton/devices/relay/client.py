@@ -17,11 +17,11 @@ class RelayTelemetryHandler(MessageHandler):
 
 
 class RelayClient(AsyncMessageNodeOperator):
-    def __init__(self, config=None, verbosity=1):
+    def __init__(self, config=None):
         if config is None:
             config = RelayClientConfig()
         handlers = [RelayTelemetryHandler()]
-        super().__init__(config, handlers, verbosity)
+        super().__init__(config, handlers)
 
 
 shutdown_event = asyncio.Event()
@@ -38,7 +38,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    client = RelayClient(verbosity=1)
+    client = RelayClient()
 
     try:
         await client.start()

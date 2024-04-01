@@ -36,12 +36,12 @@ class MountCommandHandler(MessageHandler):
 
 
 class MountController(AsyncMessageNodeOperator):
-    def __init__(self, config: MountControllerConfig = None, verbosity: int = 1):
+    def __init__(self, config: MountControllerConfig = None):
         if config is None:
             config = MountControllerConfig()
         mount_driver = ROT2Prog(config.DEVICE_ADDRESS)
         handlers = [MountCommandHandler(mount_driver)]
-        super().__init__(config, handlers, verbosity)
+        super().__init__(config, handlers)
 
 
 shutdown_event = asyncio.Event()
@@ -58,7 +58,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = MountController(verbosity=2)
+    controller = MountController()
 
     try:
         await controller.start()

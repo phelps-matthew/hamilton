@@ -6,7 +6,7 @@ import asyncio
 
 
 async def handle_command(args):
-    client = RelayClient(verbosity=0)
+    client = RelayClient()
 
     try:
         await client.start()

@@ -60,12 +60,12 @@ class RelayCommandHandler(MessageHandler):
 
 
 class RelayController(AsyncMessageNodeOperator):
-    def __init__(self, config: RelayControllerConfig = None, verbosity: int = 1):
+    def __init__(self, config: RelayControllerConfig = None):
         if config is None:
             config = RelayControllerConfig()
-        relay_driver = FTDIBitbangRelay(device_id=config.DEVICE_ID, verbosity=verbosity)
+        relay_driver = FTDIBitbangRelay(device_id=config.DEVICE_ID)
         handlers = [RelayCommandHandler(relay_driver)]
-        super().__init__(config, handlers, verbosity)
+        super().__init__(config, handlers)
 
 
 shutdown_event = asyncio.Event()
@@ -82,7 +82,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = RelayController(verbosity=2)
+    controller = RelayController()
 
     try:
         await controller.start()
