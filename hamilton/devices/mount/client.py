@@ -24,10 +24,13 @@ class MountClient(AsyncMessageNodeOperator):
         super().__init__(config, handlers)
         self.routing_key_base = "observatory.device.mount.command"
 
-    async def _publish_command(self, command: str, parameters: dict) -> dict:
+    async def _publish_command(self, command: str, parameters: dict, rpc: bool = True) -> dict:
         routing_key = f"{self.routing_key_base}.{command}"
         message = self.msg_generator.generate_command(command, parameters)
-        response = await self.publish_rpc_message(routing_key, message)
+        if rpc:
+            response = await self.publish_rpc_message(routing_key, message)
+        else:
+            response = await self.publish_message(routing_key, message)
         return response
 
     async def status(self):

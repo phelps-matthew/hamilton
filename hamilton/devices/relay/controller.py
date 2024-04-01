@@ -18,6 +18,7 @@ class RelayCommandHandler(MessageHandler):
         self.shutdown_hooks = [self.shutdown_relay]
         self.relay = relay_driver
         self.id_map = {"uhf_bias": 1, "vhf_bias": 2, "vhf_pol": 3, "uhf_pol": 4}
+        self.routing_key_base = "observatory.device.mount.telemetry"
 
     async def shutdown_relay(self):
         self.relay.close()
@@ -36,6 +37,7 @@ class RelayCommandHandler(MessageHandler):
         parameters = message["payload"]["parameters"]
 
         if command == "set":
+            telemetry_type = None
             id = parameters.get("id")
             state = parameters.get("state")
             if state not in ["on", "off"]:
@@ -46,17 +48,17 @@ class RelayCommandHandler(MessageHandler):
                 return response
             else:
                 response = self.relay.set_relay(relay_num=self.id_map[id], state=state)
+
         elif command == "status":
+            telemetry_type = "status"
             raw_response = self.relay.get_relay_state()
             response = self.parse_state_to_dict(raw_response)
 
-        if response:
-            telemetry_msg = self.node_operations.msg_generator.generate_telemetry("status", response)
-            await self.node_operations.publish_message(
-                "observatory.device.relay.telemetry.status", telemetry_msg, correlation_id
-            )
-
-        return response
+        if telemetry_type is not None:
+            routing_key = f"{self.routing_key_base}.{telemetry_type}"
+            response = {} if response is None else response
+            telemetry_msg = self.node_operations.msg_generator.generate_telemetry(telemetry_type, response)
+            await self.node_operations.publish_message(routing_key, telemetry_msg, correlation_id)
 
 
 class RelayController(AsyncMessageNodeOperator):

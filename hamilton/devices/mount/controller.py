@@ -8,10 +8,12 @@ from hamilton.devices.mount.config import MountControllerConfig
 from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.message_node.interfaces import MessageHandler
 
+
 class MountCommandHandler(MessageHandler):
     def __init__(self, mount_driver: ROT2Prog):
         super().__init__(message_type=MessageHandlerType.COMMAND)
         self.mount: ROT2Prog = mount_driver
+        self.routing_key_base = "observatory.device.mount.telemetry"
 
     async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> None:
         response = None
@@ -19,20 +21,24 @@ class MountCommandHandler(MessageHandler):
         parameters = message["payload"]["parameters"]
 
         if command == "set":
+            telemetry_type = None
             response = self.mount.set(parameters.get("azimuth"), parameters.get("elevation"))
+
         elif command == "status":
+            telemetry_type = "azel"
             response = self.mount.status()
+
         elif command == "stop":
+            telemetry_type = None
             response = self.mount.stop()
 
-        if response:
+        if telemetry_type is not None:
+            routing_key = f"{self.routing_key_base}.{telemetry_type}"
             az, el = response
             telemetry_msg = self.node_operations.msg_generator.generate_telemetry(
                 "azel", {"azimuth": az, "elevation": el}
             )
-            await self.node_operations.publish_message(
-                "observatory.device.mount.telemetry.azel", telemetry_msg, correlation_id
-            )
+            await self.node_operations.publish_message(routing_key, telemetry_msg, correlation_id)
 
 
 class MountController(AsyncMessageNodeOperator):
