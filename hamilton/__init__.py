@@ -1,3 +1,8 @@
-import logging
+import json
+import logging.config
+from pathlib import Path
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
+config_path = Path(__file__).parent / "logging" / "logging_config.json"
+with open(config_path, "rt") as f:
+    config = json.load(f)
+logging.config.dictConfig(config)

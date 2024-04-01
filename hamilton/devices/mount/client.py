@@ -22,6 +22,29 @@ class MountClient(AsyncMessageNodeOperator):
             config = MountClientConfig()
         handlers = [MountTelemetryHandler()]
         super().__init__(config, handlers)
+        self.routing_key_base = "observatory.device.mount.command"
+
+    async def _publish_command(self, command: str, parameters: dict) -> dict:
+        routing_key = f"{self.routing_key_base}.{command}"
+        message = self.msg_generator.generate_command(command, parameters)
+        response = await self.publish_rpc_message(routing_key, message)
+        return response
+
+    async def status(self):
+        command = "status"
+        parameters = {}
+        return await self._publish_command(command, parameters)
+
+    async def set(self, az, el):
+        command = "set"
+        parameters = {"azimuth": az, "elevation": el}
+        return await self._publish_command(command, parameters)
+
+    async def stop_rotor(self):
+        command = "stop"
+        parameters = {}
+        return await self._publish_command(command, parameters)
+    
 
 
 shutdown_event = asyncio.Event()
@@ -42,15 +65,10 @@ async def main():
 
     try:
         await client.start()
-        command = "status"
-        parameters = {}
-        message = client.msg_generator.generate_command(command, parameters)
 
-        # Publish message
-        await client.publish_message("observatory.device.mount.command.status", message)
-
-        # Publish RPC message and await response
-        response = await client.publish_rpc_message("observatory.device.mount.command.status", message)
+        response = await client.status()
+        print(response)
+        response = await client.stop_rotor()
         print(response)
 
     except Exception as e:

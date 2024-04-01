@@ -22,6 +22,34 @@ class RelayClient(AsyncMessageNodeOperator):
             config = RelayClientConfig()
         handlers = [RelayTelemetryHandler()]
         super().__init__(config, handlers)
+        self.routing_key_base = "observatory.device.relay.command"
+
+    async def _publish_command(self, command: str, parameters: dict, rpc: bool = True) -> dict:
+        routing_key = f"{self.routing_key_base}.{command}"
+        message = self.msg_generator.generate_command(command, parameters)
+        if rpc:
+            response = await self.publish_rpc_message(routing_key, message)
+        else:
+            response = await self.publish_message(routing_key, message)
+        return response
+
+    async def set(self, id: str, state: str) -> dict:
+        """
+        Set relay state.
+
+        Args:
+        - id (str): The relay ID. Possible values are "uhf_bias", "vhf_bias", "vhf_pol", "uhf_pol".
+        - state (str): The desired state of the relay. Possible values are "on", "off".
+        """
+        command = "set"
+        parameters = {"id": id, "state": state}
+        return await self._publish_command(command, parameters, rpc=False)
+
+    async def status(self) -> dict:
+        """Query relay status"""
+        command = "status"
+        parameters = {}
+        return await self._publish_command(command, parameters)
 
 
 shutdown_event = asyncio.Event()
@@ -42,15 +70,22 @@ async def main():
 
     try:
         await client.start()
-        command = "status"
-        parameters = {}
-        message = client.msg_generator.generate_command(command, parameters)
 
-        # Publish message
-        await client.publish_message("observatory.device.relay.command.status", message)
+        response = await client.status()
+        print(response)
 
-        # Publish RPC message and await response
-        response = await client.publish_rpc_message("observatory.device.relay.command.status", message)
+        parameters = {"id": "uhf_bias", "state": "on"}
+        response = await client.set(**parameters)
+        print(response)
+
+        response = await client.status()
+        print(response)
+
+        parameters = {"id": "uhf_bias", "state": "off"}
+        response = await client.set(**parameters)
+        print(response)
+
+        response = await client.status()
         print(response)
 
     except Exception as e:

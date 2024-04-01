@@ -8,7 +8,7 @@ from typing import Optional
 
 from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.common.utils import CustomJSONEncoder
-from hamilton.logging.config import LogCollectorConfig
+from hamilton.log_collector.config import LogCollectorConfig
 from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.message_node.interfaces import MessageHandler
 

@@ -1,21 +1,22 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from hamilton.database.config import DBUpdaterConfig
+from hamilton.base.config import DBConfig
 
 
 async def setup_db():
-    client = AsyncIOMotorClient(DBUpdaterConfig.mongo_uri)
-    db = client[DBUpdaterConfig.mongo_db_name]
+    client = AsyncIOMotorClient(DBConfig.mongo_uri)
+    db = client[DBConfig.mongo_db_name]
     return client, db
 
 
 async def init_db(db):
-    await db[DBUpdaterConfig.mongo_collection_name].create_index("norad_cat_id", unique=True)
+    await db[DBConfig.mongo_collection_name].create_index("norad_cat_id", unique=True)
 
 
 async def setup_and_index_db():
-    client = AsyncIOMotorClient(DBUpdaterConfig.mongo_uri)
-    db = client[DBUpdaterConfig.mongo_db_name]
-    await db[DBUpdaterConfig.mongo_collection_name].create_index("norad_cat_id", unique=True)
+    client = AsyncIOMotorClient(DBConfig.mongo_uri)
+    db = client[DBConfig.mongo_db_name]
+    await db[DBConfig.mongo_collection_name].create_index("norad_cat_id", unique=True)
     return client, db
 
 

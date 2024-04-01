@@ -3,6 +3,11 @@
 import argparse
 import asyncio
 from hamilton.devices.mount.client import MountClient
+import logging
+
+
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.WARNING)
 
 
 async def handle_command(args):
@@ -11,17 +16,14 @@ async def handle_command(args):
     try:
         await client.start()
         if args.command == "set":
-            params = {"azimuth": args.azimuth, "elevation": args.elevation}
-            message = client.msg_generator.generate_command(args.command, params)
-            response = await client.publish_rpc_message("observatory.device.mount.command.set", message)
+            params = {"az": args.azimuth, "el": args.elevation}
+            response = await client.set(**params)
         elif args.command == "status":
-            message = client.msg_generator.generate_command(args.command, {})
-            response = await client.publish_rpc_message("observatory.device.mount.command.status", message)
+            response = await client.status()
         elif args.command == "stop":
-            message = client.msg_generator.generate_command(args.command, {})
-            response = await client.publish_rpc_message("observatory.device.mount.command.stop", message)
+            response = await client.stop_rotor()
 
-        print("Response:", response)
+        print(response)
     finally:
         await client.stop()
 

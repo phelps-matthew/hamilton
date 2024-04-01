@@ -3,6 +3,10 @@
 import argparse
 from hamilton.devices.relay.client import RelayClient
 import asyncio
+import logging
+
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.WARNING)
 
 
 async def handle_command(args):
@@ -10,15 +14,17 @@ async def handle_command(args):
 
     try:
         await client.start()
-        if args.command == "set":
-            params = {"id": args.id, "state": args.state}
-            message = client.msg_generator.generate_command(args.command, params)
-            response = await client.publish_rpc_message("observatory.device.relay.command.set", message)
-        elif args.command == "status":
-            message = client.msg_generator.generate_command(args.command, {})
-            response = await client.publish_rpc_message("observatory.device.relay.command.status", message)
 
-        print("Response:", response)
+        if args.command == "set":
+            parameters = {"id": args.id, "state": args.state}
+            response = await client.set(**parameters)
+
+        elif args.command == "status":
+            response = await client.status()
+
+        if response:
+            print(response)
+
     finally:
         await client.stop()
 
