@@ -21,15 +21,15 @@ from hamilton.message_node.rpc_manager import RPCManager
 
 # Setup basic logging and create a named logger for the this module
 logger = logging.getLogger(__name__)
-aio_pika_logger = logging.getLogger("aio_pika")
+# aio_pika_logger = logging.getLogger("aio_pika")
 
 
 class AsyncMessageNode(IMessageNodeOperations):
-    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler], verbosity: int = 0):
+    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler]):
         self.config: MessageNodeConfig = config
         self.rpc_manager: RPCManager = RPCManager()
-        self.consumer: AsyncConsumer = AsyncConsumer(config, self.rpc_manager, handlers, verbosity)
-        self.publisher: AsyncProducer = AsyncProducer(config, self.rpc_manager, verbosity)
+        self.consumer: AsyncConsumer = AsyncConsumer(config, self.rpc_manager, handlers)
+        self.publisher: AsyncProducer = AsyncProducer(config, self.rpc_manager)
         self._msg_generator: MessageGenerator = MessageGenerator(config.name, config.message_version)
         self.startup_hooks: list[Callable[[], None]] = []
         self.shutdown_hooks: list[Callable[[], None]] = []
@@ -39,22 +39,6 @@ class AsyncMessageNode(IMessageNodeOperations):
             handler.set_node_operations(self)
             self.startup_hooks.extend(handler.startup_hooks)
             self.shutdown_hooks.extend(handler.shutdown_hooks)
-
-        if verbosity == 0:
-            logger.setLevel(logging.WARNING)
-            aio_pika_logger.setLevel(logging.WARNING)
-        elif verbosity == 1:
-            logger.setLevel(logging.INFO)
-            aio_pika_logger.setLevel(logging.WARNING)
-        elif verbosity == 2:
-            logger.setLevel(logging.DEBUG)
-            aio_pika_logger.setLevel(logging.WARNING)
-        elif verbosity == 3:
-            logger.setLevel(logging.DEBUG)
-            aio_pika_logger.setLevel(logging.INFO)
-        else:
-            logger.setLevel(logging.DEBUG)
-            aio_pika_logger.setLevel(logging.DEBUG)
 
     async def start(self):
         """Starts the consumer and publisher asynchronously."""

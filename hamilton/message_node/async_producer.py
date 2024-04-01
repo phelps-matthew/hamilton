@@ -13,19 +13,12 @@ from hamilton.message_node.rpc_manager import RPCManager
 logger = logging.getLogger(__name__)
 
 class AsyncProducer:
-    def __init__(self, config: MessageNodeConfig, rpc_manager: RPCManager, verbosity: int = 0):
+    def __init__(self, config: MessageNodeConfig, rpc_manager: RPCManager):
         self.config: MessageNodeConfig = config
         self.publish_hashmap: dict[str, Publishing] = self._build_publish_hashmap()
         self.connection: aio_pika.Connection = None
         self.channel: aio_pika.Channel = None
         self.rpc_manager: RPCManager = rpc_manager
-
-        if verbosity == 0:
-            logger.setLevel(logging.WARNING)
-        elif verbosity == 1:
-            logger.setLevel(logging.INFO)
-        else:
-            logger.setLevel(logging.DEBUG)
 
     def _build_publish_hashmap(self) -> dict:
         """Builds a hashmap of routing keys to Publishing objects for quick lookup."""

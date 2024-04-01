@@ -160,5 +160,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # logging.basicConfig(filename="relay_control.log", level=logging.DEBUG)
     main()

@@ -36,7 +36,7 @@ class JE9PELGenerator:
         return response.text
 
     def write_csv_to_file(self, data: str | Path, file_path: str | Path) -> None:
-        logger.info(f"Writing {Path(file_path).absolute()}")
+        logger.debug(f"Writing {Path(file_path).absolute()}")
         with Path(file_path).open("w") as file:
             file.write(data)
 
@@ -54,7 +54,7 @@ class JE9PELGenerator:
         df.to_json(file_path, orient="records", lines=True)
 
     def write_json_to_file(self, data, file_path):
-        logger.info(f"Writing {Path(file_path).absolute()}")
+        logger.debug(f"Writing {Path(file_path).absolute()}")
         with Path(file_path).open("w") as file:
             json.dump(data, file, indent=4)
 
@@ -79,14 +79,14 @@ class JE9PELGenerator:
         filename = "je9pel.csv"
 
         if use_cache:
-            logger.info("Referencing local cache.")
-            logger.info("Fetching JE9PEL satellite frequency data.")
+            logger.debug("Referencing local cache.")
+            logger.debug("Fetching JE9PEL satellite frequency data.")
 
         else:
-            logger.info("Creating local cache.")
+            logger.debug("Creating local cache.")
             cache_dir = self.initialize_cache_directory(files_to_remove=[filename])
 
-            logger.info("Fetching JE9PEL satellite frequency data.")
+            logger.debug("Fetching JE9PEL satellite frequency data.")
             csv_data = self.download_csv(je9pel_url)
             self.write_csv_to_file(csv_data, cache_dir / filename)
 
@@ -219,7 +219,7 @@ class JE9PELGenerator:
     ## Transform ##
 
     def transform(self, df: pd.DataFrame) -> dict:
-        logger.info("Formatting database to normalized dictionary form.")
+        logger.debug("Formatting database to normalized dictionary form.")
         data_json = df.to_json(orient="records")
 
         data = json.loads(data_json)
@@ -229,7 +229,7 @@ class JE9PELGenerator:
     ## Format ##
 
     def format(self, data):
-        logger.info("Reindexing data to use norad_id as primary key.")
+        logger.debug("Reindexing data to use norad_id as primary key.")
         je9pel_db = {}
         for d in data:
             key = d["norad_cat_id"]

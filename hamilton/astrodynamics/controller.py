@@ -1,13 +1,10 @@
-import json
-from typing import Any
+import asyncio
+import signal
+from typing import Optional
 
-import pika
-from pika.channel import Channel
-from pika.spec import Basic
-
-from hamilton.base.message_node import MessageHandler, MessageNode
-from hamilton.base.messages import MessageHandlerType
-from hamilton.common.utils import CustomJSONDecoder
+from hamilton.base.messages import Message, MessageHandlerType
+from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
+from hamilton.message_node.interfaces import MessageHandler
 from hamilton.astrodynamics.api import SpaceObjectTracker
 from hamilton.astrodynamics.config import AstrodynamicsControllerConfig
 
@@ -16,15 +13,14 @@ class AstrodynamicsCommandHandler(MessageHandler):
     def __init__(self, so_tracker: SpaceObjectTracker):
         super().__init__(message_type=MessageHandlerType.COMMAND)
         self.so_tracker = so_tracker
+        self.routing_key_base = "observatory.astrodynamics.telemetry"
 
-    def handle_message(self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes) -> Any:
+
+    async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> None:
         response = None
-        message = json.loads(body, cls=CustomJSONDecoder)
-        corr_id = properties.correlation_id
+        telemetry_type = None
         command = message["payload"]["commandType"]
         parameters = message["payload"]["parameters"]
-        routing_key_base = "observatory.astrodynamics.telemetry."
-        telemetry_type = None
 
         if command == "get_kinematic_state":
             telemetry_type = "kinematic_state"
@@ -50,24 +46,54 @@ class AstrodynamicsCommandHandler(MessageHandler):
             sat_id = parameters.get("sat_id")
             response = self.so_tracker.precompute_orbit(sat_id)
 
-        if response and telemetry_type:
-            routing_key = routing_key_base + telemetry_type
+        if telemetry_type:
+            routing_key = f"{self.routing_key_base}.{telemetry_type}"
+            response = {} if response is None else response
             telemetry_msg = self.node_operations.msg_generator.generate_telemetry(telemetry_type, response)
-            self.node_operations.publish_message(routing_key, telemetry_msg, corr_id)
+            await self.node_operations.publish_message(routing_key, telemetry_msg, correlation_id)
 
         return response
 
 
-class AstrodynamicsController:
-    def __init__(self, config: AstrodynamicsControllerConfig, handlers: list[MessageHandler]):
-        self.node: MessageNode = MessageNode(config, handlers, verbosity=3)
+
+
+class AstrodynamicsController(AsyncMessageNodeOperator):
+    def __init__(self, config: AstrodynamicsControllerConfig = None, verbosity: int = 1):
+        if config is None:
+            config = AstrodynamicsControllerConfig()
+        so_tracker = SpaceObjectTracker(config=config)
+        handlers = [AstrodynamicsCommandHandler(so_tracker)]
+        super().__init__(config, handlers, verbosity)
+
+
+
+
+shutdown_event = asyncio.Event()
+
+
+def signal_handler():
+    shutdown_event.set()
+
+
+async def main():
+    # Setup signal handlers for graceful shutdown
+    loop = asyncio.get_running_loop()
+    for signame in ("SIGINT", "SIGTERM"):
+        loop.add_signal_handler(getattr(signal, signame), signal_handler)
+
+    # Application setup
+    controller = AstrodynamicsController(verbosity=2)
+
+    try:
+        await controller.start()
+        await shutdown_event.wait()  # Wait for the shutdown signal
+
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+    finally:
+        await controller.stop()
 
 
 if __name__ == "__main__":
-    config = AstrodynamicsControllerConfig()
-    so_tracker = SpaceObjectTracker(config=config)
-    handlers = [AstrodynamicsCommandHandler(so_tracker)]
-    controller = AstrodynamicsController(config, handlers)
-
-    # Will stay up indefinitely as producer and consumer threads are non-daemon and keep the process alive
-    controller.node.start()
+    asyncio.run(main())

@@ -5,36 +5,27 @@ import logging
 import signal
 from pathlib import Path
 from hamilton.database.config import DBUpdaterConfig
-from hamilton.database.generators.je9pel_generator import JE9PELGenerator
-from hamilton.database.generators.satcom_db_generator import SatcomDBGenerator
 from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from hamilton.database.setup_db import setup_and_index_db
+from hamilton.database.generators.je9pel_generator import JE9PELGenerator
+from hamilton.database.generators.satcom_db_generator import SatcomDBGenerator
 
-
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 class DBUpdater(AsyncMessageNodeOperator):
-    def __init__(self, config: DBUpdaterConfig = None, verbosity: int = 2):
+    def __init__(self, config: DBUpdaterConfig = None):
         if config is None:
             config = DBUpdaterConfig()
-        super().__init__(config=config, verbosity=verbosity)
-        je9pel = JE9PELGenerator(DBUpdaterConfig)
-        self.db_generator = SatcomDBGenerator(DBUpdaterConfig, je9pel)
+        super().__init__(config=config)
+        je9pel = JE9PELGenerator(config)
+        self.db_generator = SatcomDBGenerator(config, je9pel)
         self.config = config
         self.json_db_path = Path(self.config.json_db_path).expanduser()
         self.routing_key_base = "observatory.database.telemetry"
         self.db_client: AsyncIOMotorClient = None
         self.db: AsyncIOMotorDatabase = None
-
-        if verbosity == 0:
-            logger.setLevel(logging.WARNING)
-        elif verbosity == 1:
-            logger.setLevel(logging.INFO)
-        else:
-            logger.setLevel(logging.DEBUG)
 
     async def _setup_and_index_db(self):
         self.db_client, self.db = await setup_and_index_db()
@@ -99,7 +90,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = DBUpdater(verbosity=3)
+    controller = DBUpdater()
 
     try:
         await controller.start()

@@ -288,8 +288,8 @@ class SatcomDBGenerator:
 
     ## Entrypoint ##
 
-    def generate_db(self, use_cache: bool =False) -> dict:
-        logger.debug("Starting SATCOM database generation.")
+    def generate_db(self, use_cache: bool = False) -> dict:
+        logger.info("Starting SATCOM database generation.")
 
         # Fetch
         tle_data, satellite_data, transmitter_data = self.fetch(use_cache)
@@ -309,8 +309,8 @@ class SatcomDBGenerator:
         # Merge with JE9PEL
         je9pel_data = self.je9pel.generate_db(use_cache=use_cache)
         data = self.merge_with_je9pel(data, je9pel_data)
-        logger.debug(f"Total number of observable satellites: {len(data)}")
-        logger.debug("SATCOM database generation complete.")
+        logger.info(f"Total number of observable satellites: {len(data)}")
+        logger.info("SATCOM database generation complete.")
 
         return data
 
@@ -326,9 +326,7 @@ class SatcomDBGenerator:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
     je9pel = JE9PELGenerator(DBUpdaterConfig)
     generator = SatcomDBGenerator(DBUpdaterConfig, je9pel)
     data = generator.generate_db(use_cache=False)
     generator.write_db(data)
-
