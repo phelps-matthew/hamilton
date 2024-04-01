@@ -3,8 +3,6 @@ import numpy as np
 from datetime import datetime
 from bson import ObjectId
 import json
-import logging.config
-from pathlib import Path
 
 
 class CustomJSONEncoder(json.JSONEncoder):
