@@ -1,5 +1,3 @@
-"""Both controller and updater acquire and release locks for thread-safe file reading/writing"""
-
 import asyncio
 import logging
 import signal
