@@ -37,6 +37,7 @@ class MessageNodeConfig(Config):
     exchanges: list[Exchange] = []
     bindings: list[Binding] = []
     publishings: list[Publishing] = []
+    observations_dir: str = "~/hamilton/observations"
 
 
 class LogConfig(MessageNodeConfig):

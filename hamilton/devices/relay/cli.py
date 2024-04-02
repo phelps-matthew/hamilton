@@ -22,8 +22,7 @@ async def handle_command(args):
         elif args.command == "status":
             response = await client.status()
 
-        if response:
-            print(response)
+        print(response)
 
     finally:
         await client.stop()

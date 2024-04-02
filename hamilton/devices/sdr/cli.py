@@ -1,21 +1,45 @@
 #!/home/mgp/miniforge3/envs/gr39/bin/python
 
 import argparse
-from hamilton.devices.sdr.config import Config
-from hamilton.base.client import BaseClient
+import asyncio
+from hamilton.devices.sdr.client import SDRClient
+import logging
 
 
-class SDRClient(BaseClient):
-    def __init__(self, config: Config = Config()):
-        super().__init__(config)
-        self.config = config
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.WARNING)
+
+async def handle_command(args):
+    client = SDRClient()
+
+    try:
+        await client.start()
+
+        if args.command == "status":
+            response = await client.status()
+
+        if args.command == "start_record":
+            params = {"freq": args.freq, "sample_rate": args.sample_rate, "sat_id": args.sat_id, "rx_gain": args.rx_gain}
+            response = await client.start_record(**params)
+
+        elif args.command == "stop_record":
+            response = await client.stop_record()
+
+        print(response)
+    finally:
+        await client.stop()
 
 
-def main():
-    client = SDRClient(config=Config)
+if __name__ == "__main__":
+    # Setup argparser
+    parser = argparse.ArgumentParser(
+        description="Control the mount system using various commands",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    subparsers = parser.add_subparsers(dest="command", title="Commands", metavar="<command>")
 
-    parser = argparse.ArgumentParser(description="Control SDR operations.")
-    subparsers = parser.add_subparsers(dest="command", help="Commands")
+    # Subparser for the 'status' command
+    parser_status = subparsers.add_parser("status", help="Request status")
 
     # Sub-command 'start_record'
     parser_start = subparsers.add_parser("start", help="Start recording")
@@ -27,17 +51,10 @@ def main():
     # Sub-command 'stop_record'
     parser_stop = subparsers.add_parser("stop", help="Stop recording")
 
+
     args = parser.parse_args()
 
-    if args.command == "start":
-        parameters = {k: v for k, v in vars(args).items() if v is not None and k != "command"}
-        print(parameters)
-        response = client.send_command("start_record", parameters)
-        print("Recording started:", response)
-    elif args.command == "stop":
-        response = client.send_command("stop_record", {})
-        print("Recording stopped:", response)
-
-
-if __name__ == "__main__":
-    main()
+    if args.command:
+        asyncio.run(handle_command(args))
+    else:
+        parser.print_help()

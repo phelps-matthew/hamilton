@@ -24,6 +24,7 @@ import gr_sigmf
 import threading
 import logging
 
+logger = logging.getLogger(__name__)
 
 class SigMFRecordFlowgraph(gr.top_block):
 
@@ -56,19 +57,13 @@ class SigMFRecordFlowgraph(gr.top_block):
         ##################################################
         # Log the initializtion arguments (MP)
         ##################################################
-        self.log = logging.getLogger(self.__class__.__name__)
-        if not self.log.handlers:
-            handler = logging.StreamHandler()
-            self.log.addHandler(handler)
-        self.log.setLevel(logging.DEBUG)
-
-        self.log.info(f"SAMP RATE: {self.samp_rate}")
-        self.log.info(f"TARGET SAMP RATE: {self.target_samp_rate}")
-        self.log.info(f"RX_FREQ: {self.rx_freq}")
-        self.log.info(f"RX_GAIN: {self.rx_gain}")
-        self.log.info(f"SAT_ID: {self.sat_id}")
-        self.log.info(f"CH0_ANTENNA: {self.ch0_antenna}")
-        self.log.info(f"FILENAME: {self.filename}")
+        logger.info(f"SAMP RATE: {self.samp_rate}")
+        logger.info(f"TARGET SAMP RATE: {self.target_samp_rate}")
+        logger.info(f"RX_FREQ: {self.rx_freq}")
+        logger.info(f"RX_GAIN: {self.rx_gain}")
+        logger.info(f"SAT_ID: {self.sat_id}")
+        logger.info(f"CH0_ANTENNA: {self.ch0_antenna}")
+        logger.info(f"FILENAME: {self.filename}")
 
 
         ##################################################

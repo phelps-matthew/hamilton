@@ -1,6 +1,6 @@
 import signal
 import asyncio
-from typing import Optional
+from typing import Optional, Literal
 
 from hamilton.message_node.interfaces import MessageHandler
 from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
@@ -33,14 +33,8 @@ class RelayClient(AsyncMessageNodeOperator):
             response = await self.publish_message(routing_key, message)
         return response
 
-    async def set(self, id: str, state: str) -> dict:
-        """
-        Set relay state.
-
-        Args:
-        - id (str): The relay ID. Possible values are "uhf_bias", "vhf_bias", "vhf_pol", "uhf_pol".
-        - state (str): The desired state of the relay. Possible values are "on", "off".
-        """
+    async def set(self, id: Literal["uhf_bias", "vhf_bias", "vhf_pol", "uhf_pol"], state: Literal["on", "off"]) -> dict:
+        """Set relay state"""
         command = "set"
         parameters = {"id": id, "state": state}
         return await self._publish_command(command, parameters, rpc=False)

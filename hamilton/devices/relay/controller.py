@@ -18,7 +18,7 @@ class RelayCommandHandler(MessageHandler):
         self.shutdown_hooks = [self.shutdown_relay]
         self.relay = relay_driver
         self.id_map = {"uhf_bias": 1, "vhf_bias": 2, "vhf_pol": 3, "uhf_pol": 4}
-        self.routing_key_base = "observatory.device.mount.telemetry"
+        self.routing_key_base = "observatory.device.relay.telemetry"
 
     async def shutdown_relay(self):
         self.relay.close()
