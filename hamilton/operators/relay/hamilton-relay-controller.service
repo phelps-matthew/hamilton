@@ -1,0 +1,16 @@
+[Unit]
+Description=Relay Controller Service
+Requires=rabbitmq-server.service hamilton-log-collector.service 
+After=network.target rabbitmq-server.service hamilton-log-collector.service 
+
+[Service]
+User=mgp
+ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/devices/relay/controller.py
+Restart=on-failure
+WorkingDirectory=/home/mgp/dev/hamilton/hamilton/devices/relay/
+# Not sure these are needed..
+StandardOutput=journal
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target
