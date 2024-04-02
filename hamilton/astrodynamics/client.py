@@ -1,89 +1,105 @@
-import json
-from datetime import datetime
+import asyncio
+import signal
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
-import pika
-from pika.channel import Channel
-from pika.spec import Basic
-
 from hamilton.astrodynamics.config import AstrodynamicsClientConfig
-from hamilton.base.message_node import MessageHandler, MessageNode
+from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOperator
-from hamilton.base.messages import MessageHandlerType
-from hamilton.common.utils import CustomJSONDecoder
+from hamilton.message_node.interfaces import MessageHandler
 
 
 class AstrodynamicsTelemetryHandler(MessageHandler):
     def __init__(self):
         super().__init__(MessageHandlerType.TELEMETRY)
 
-    def handle_message(self, ch: Channel, method: Basic.Deliver, properties: pika.BasicProperties, body: bytes) -> Any:
-        message = json.loads(body, cls=CustomJSONDecoder)
+    async def handle_message(self, message: Message, correlation_id: Optional[str] = None):
         return message["payload"]["parameters"]
 
 
-class AstrodynamicsClient:
+class AstrodynamicsClient(AsyncMessageNodeOperator):
     def __init__(
         self,
-        config: AstrodynamicsClientConfig = AstrodynamicsClientConfig(),
-        handlers: list[MessageHandler] = [AstrodynamicsTelemetryHandler()],
+        config: AstrodynamicsClientConfig = None,
     ):
-        self.node: MessageNode = MessageNode(config, handlers)
-        self.base_routing_key: str = "observatory.astrodynamics.command."
+        if config is None:
+            config = AstrodynamicsClientConfig()
+        handlers = [AstrodynamicsTelemetryHandler()]
+        super().__init__(config, handlers)
+        self.routing_key_base = "observatory.astrodynamics.command"
 
-    def publish_message(self, command: str, parameters: dict[str, Any], rpc: bool = True):
-        response = None
-        routing_key = self.base_routing_key + command
-        message = self.node.msg_generator.generate_command(command, parameters)
+    async def _publish_command(self, command: str, parameters: dict, rpc: bool = True) -> dict:
+        routing_key = f"{self.routing_key_base}.{command}"
+        message = self.msg_generator.generate_command(command, parameters)
         if rpc:
-            response = self.node.publish_rpc_message(routing_key, message)
+            response = await self.publish_rpc_message(routing_key, message)
         else:
-            self.node.publish_message(routing_key, message)
+            response = await self.publish_message(routing_key, message)
         return response
 
-    def get_kinematic_state(self, sat_id: str, time: Optional[datetime] = None) -> dict[str, Any]:
+    async def get_kinematic_state(self, sat_id: str, time: Optional[datetime] = None) -> dict[str, Any]:
         command = "get_kinematic_state"
         parameters = {"sat_id": sat_id, "time": time}
-        response = self.publish_message(command, parameters, rpc=True)
-        return response
+        return await self._publish_command(command, parameters)
 
-    def get_aos_los(self, sat_id: str, time: Optional[datetime] = None, delta_t: int = 12) -> dict[int, list[datetime]]:
+    async def get_aos_los(
+        self, sat_id: str, time: Optional[datetime] = None, delta_t: int = 12
+    ) -> dict[int, list[datetime]]:
         command = "get_aos_los"
         parameters = {"sat_id": sat_id, "time": time, "delta_t": delta_t}
-        response = self.publish_message(command, parameters, rpc=True)
-        return response
+        return await self._publish_command(command, parameters)
 
-    def get_interpolated_orbit(self, sat_id: str, aos: datetime, los: datetime) -> dict[str, list]:
+    async def get_interpolated_orbit(self, sat_id: str, aos: datetime, los: datetime) -> dict[str, list]:
         command = "get_interpolated_orbit"
         parameters = {"sat_id": sat_id, "aos": aos, "los": los}
-        response = self.publish_message(command, parameters, rpc=True)
-        return response
+        return await self._publish_command(command, parameters)
 
-    def precompute_orbit(self, sat_id: str) -> None:
+    async def precompute_orbit(self, sat_id: str) -> None:
         command = "precompute_orbit"
         parameters = {"sat_id": sat_id}
-        response = self.publish_message(command, parameters, rpc=False)
-        return response
+        return await self._publish_command(command, parameters, rpc=False)
+
+
+shutdown_event = asyncio.Event()
+
+
+def signal_handler():
+    shutdown_event.set()
+
+
+async def main():
+    # Setup signal handlers for graceful shutdown
+    loop = asyncio.get_running_loop()
+    for signame in ("SIGINT", "SIGTERM"):
+        loop.add_signal_handler(getattr(signal, signame), signal_handler)
+
+    # Application setup
+    client = AstrodynamicsClient()
+
+    try:
+        await client.start()
+
+        sat_id = "39446"
+        response = await client.get_kinematic_state(sat_id=sat_id)
+        print(response)
+
+        response = await client.get_aos_los(sat_id=sat_id)
+        print(response)
+
+        aos = datetime.now()
+        los = aos + timedelta(hours=1)
+        response = await client.get_interpolated_orbit(sat_id=sat_id, aos=aos, los=los)
+        print(response)
+
+        response = await client.precompute_orbit(sat_id=sat_id)
+        print(response)
+
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+    finally:
+        await client.stop()
 
 
 if __name__ == "__main__":
-    client = AstrodynamicsClient()
-    try:
-        client.node.start()
-
-        sat_id = "39446"
-
-        response = client.get_kinematic_state(sat_id=sat_id)
-        print(response)
-
-        response = client.get_aos_los(sat_id=sat_id)
-        print(response)
-
-        response = client.get_interpolated_orbit(sat_id=sat_id)
-        print(response)
-
-        response = client.precompute_orbit(sat_id=sat_id)
-        print(response)
-
-    finally:
-        client.node.stop()
+    asyncio.run(main())

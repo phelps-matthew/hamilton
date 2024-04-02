@@ -10,7 +10,14 @@ class AstrodynamicsControllerConfig(MessageNodeConfig):
         Binding(exchange="astrodynamics", routing_keys=["observatory.astrodynamics.command.*"]),
     ]
     publishings = [
-        Publishing(exchange="astrodynamics", routing_keys=["observatory.astrodynamics.telemetry.status"]),
+        Publishing(
+            exchange="astrodynamics",
+            routing_keys=[
+                "observatory.astrodynamics.telemetry.kinematic_state",
+                "observatory.astrodynamics.telemetry.aos_los",
+                "observatory.astrodynamics.telemetry.interpolated_orbit",
+            ],
+        ),
     ]
 
     # RME
@@ -20,7 +27,6 @@ class AstrodynamicsControllerConfig(MessageNodeConfig):
 
     # Constraints
     MIN_ELEVATION = 10  # (degrees)
-
 
 
 class AstrodynamicsClientConfig(MessageNodeConfig):
@@ -36,10 +42,9 @@ class AstrodynamicsClientConfig(MessageNodeConfig):
             exchange="astrodynamics",
             routing_keys=[
                 "observatory.astrodynamics.command.get_kinematic_state",
-                "observatory.astrodynamics.command.get_kinematic_aos_los",
+                "observatory.astrodynamics.command.get_aos_los",
                 "observatory.astrodynamics.command.get_interpolated_orbit",
                 "observatory.astrodynamics.command.precompute_orbit",
             ],
         ),
     ]
-

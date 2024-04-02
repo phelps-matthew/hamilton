@@ -7,14 +7,19 @@ from hamilton.message_node.async_message_node_operator import AsyncMessageNodeOp
 from hamilton.message_node.interfaces import MessageHandler
 from hamilton.astrodynamics.api import SpaceObjectTracker
 from hamilton.astrodynamics.config import AstrodynamicsControllerConfig
+from hamilton.database.client import DBClient
 
 
 class AstrodynamicsCommandHandler(MessageHandler):
-    def __init__(self, so_tracker: SpaceObjectTracker):
+    def __init__(self, so_tracker: SpaceObjectTracker, database: DBClient):
         super().__init__(message_type=MessageHandlerType.COMMAND)
         self.so_tracker = so_tracker
+        self.db = database
+        self.startup_hooks = [self._start_db]
         self.routing_key_base = "observatory.astrodynamics.telemetry"
 
+    async def _start_db(self):
+        await self.db.start()
 
     async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> None:
         response = None
@@ -26,46 +31,41 @@ class AstrodynamicsCommandHandler(MessageHandler):
             telemetry_type = "kinematic_state"
             sat_id = parameters.get("sat_id")
             time = parameters.get("time", None)
-            response = self.so_tracker.get_kinematic_state(sat_id, time)
+            response = await self.so_tracker.get_kinematic_state(sat_id, time)
 
-        elif command == "get_kinematic_aos_los":
+        elif command == "get_aos_los":
             telemetry_type = "aos_los"
             sat_id = parameters.get("sat_id")
-            time = parameters.get("time")
-            delta_t = parameters.get("delta_t")
-            response = self.so_tracker.get_aos_los(sat_id, time, delta_t)
+            time = parameters.get("time", None)
+            delta_t = parameters.get("delta_t", 12)
+            response = await self.so_tracker.get_aos_los(sat_id, time, delta_t)
 
         elif command == "get_interpolated_orbit":
             telemetry_type = "interpolated_orbit"
             sat_id = parameters.get("sat_id")
             aos = parameters.get("aos")
             los = parameters.get("los")
-            response = self.so_tracker.get_interpolated_orbit(sat_id, aos, los)
+            response = await self.so_tracker.get_interpolated_orbit(sat_id, aos, los)
 
         elif command == "precompute_orbit":
             sat_id = parameters.get("sat_id")
-            response = self.so_tracker.precompute_orbit(sat_id)
+            response = await self.so_tracker.precompute_orbit(sat_id)
 
-        if telemetry_type:
+        if telemetry_type is not None:
             routing_key = f"{self.routing_key_base}.{telemetry_type}"
             response = {} if response is None else response
             telemetry_msg = self.node_operations.msg_generator.generate_telemetry(telemetry_type, response)
             await self.node_operations.publish_message(routing_key, telemetry_msg, correlation_id)
-
-        return response
-
-
 
 
 class AstrodynamicsController(AsyncMessageNodeOperator):
     def __init__(self, config: AstrodynamicsControllerConfig = None):
         if config is None:
             config = AstrodynamicsControllerConfig()
-        so_tracker = SpaceObjectTracker(config=config)
-        handlers = [AstrodynamicsCommandHandler(so_tracker)]
+        self.db = DBClient()
+        so_tracker = SpaceObjectTracker(config=config, database=self.db)
+        handlers = [AstrodynamicsCommandHandler(so_tracker, self.db)]
         super().__init__(config, handlers)
-
-
 
 
 shutdown_event = asyncio.Event()

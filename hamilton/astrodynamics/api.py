@@ -1,30 +1,19 @@
 """Compute astrodynamic parameters associated with space objects. Based on TLE's for now."""
 
-import json
-import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-import pika
 import pytz
 from skyfield.api import EarthSatellite, load, wgs84
 
 from hamilton.astrodynamics.config import AstrodynamicsControllerConfig
-from hamilton.common.utils import CustomJSONEncoder
+from hamilton.database.client import DBClient
 
 
 class SpaceObjectTracker:
-    def __init__(self, config: AstrodynamicsControllerConfig):
-        self.config = config
-
-        # DB query init
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.config.rabbitmq_server))
-        self.channel = self.connection.channel()
-        result = self.channel.queue_declare(queue="", exclusive=True)
-        self.callback_queue = result.method.queue
-        self.channel.basic_consume(queue=self.callback_queue, on_message_callback=self._db_on_response, auto_ack=True)
-        self.response = None
-        self.corr_id = None
+    def __init__(self, config: AstrodynamicsControllerConfig, database: DBClient):
+        self.config: AstrodynamicsControllerConfig = config
+        self.db: DBClient = database
 
         # Astrodynamics init
         self._timescale = load.timescale()
@@ -40,36 +29,14 @@ class SpaceObjectTracker:
         self.orbits = dict()
         self.satellites = dict()
 
-    def _db_on_response(self, ch, method, properties, body):
-        if self.corr_id == properties.correlation_id:
-            self.response = json.loads(body)
-
-    def _db_query(self, sat_id: str) -> dict:
-        message = {"command": "query", "parameters": {"sat_id": sat_id}}
-        self.response = None
-        self.corr_id = str(uuid.uuid4())
-        self.channel.basic_publish(
-            exchange="",
-            routing_key=self.config.DB_COMMAND_QUEUE,
-            properties=pika.BasicProperties(
-                reply_to=self.callback_queue,
-                correlation_id=self.corr_id,
-            ),
-            body=json.dumps(message, cls=CustomJSONEncoder),
-        )
-
-        while self.response is None:
-            self.connection.process_data_events()
-
-        return self.response
-
-    def _get_earth_satellite(self, sat_id: str) -> EarthSatellite:
+    async def _get_earth_satellite(self, sat_id: str) -> EarthSatellite:
         # Fetch from cached EarthSatellite objects
         if sat_id in self.satellites:
             satellite = self.satellites[sat_id]
         # Otherwise, create new EarthSatellite and cache it
         else:
-            satellite_record = self._db_query(sat_id)
+            await self.db.start()
+            satellite_record = await self.db.query_record(sat_id)
             tle_line_1 = satellite_record["tle1"]
             tle_line_2 = satellite_record["tle2"]
             satellite = EarthSatellite(line1=tle_line_1, line2=tle_line_2)
@@ -77,7 +44,7 @@ class SpaceObjectTracker:
 
         return satellite
 
-    def get_kinematic_state(self, sat_id=None, time=None) -> dict:
+    async def get_kinematic_state(self, sat_id=None, time=None) -> dict:
         """Calculate observational params for single space object at a given time
 
         Args:
@@ -91,7 +58,7 @@ class SpaceObjectTracker:
             time = datetime.now(tz=timezone.utc)
         time_scale = self._timescale.from_datetime(time)
 
-        satellite = self._get_earth_satellite(sat_id)
+        satellite = await self._get_earth_satellite(sat_id)
         params = (satellite - self._sensor).at(time_scale).frame_latlon_and_rates(self._sensor)
         el = params[0].degrees
         az = params[1].degrees
@@ -112,7 +79,7 @@ class SpaceObjectTracker:
 
         return kinematic_state
 
-    def get_aos_los(self, sat_id, time=None, delta_t=12):
+    async def get_aos_los(self, sat_id, time=None, delta_t=12) -> dict[int, ]:
         """Cacluate acquisition of signal (AOS) and loss of signal (LOS) times
 
         Args:
@@ -120,7 +87,11 @@ class SpaceObjectTracker:
             time: time to evaluate TLE at, defaults to current time
             delta_t: offset from `time` by which to compute next AOS/LOS (hours)
         Returns:
-            aos, los: datetime times
+            event_map: dict(str, datetime)
+            Event map:
+            * aos — Satellite rose above ``altitude_degrees``.
+            * tca — Satellite culminated and started to descend again.
+            * los — Satellite fell below ``altitude_degrees``.
         """
         # offset from `time` by which to compute next AOS and LOS
         delta_t = timedelta(hours=delta_t)
@@ -130,15 +101,16 @@ class SpaceObjectTracker:
         t0 = self._timescale.from_datetime(time - timedelta(minutes=5))  # search results from now - 5 minutes
         t1 = self._timescale.from_datetime(time + delta_t)  # search up to +delta_t hours later
 
-        satellite = self._get_earth_satellite(sat_id=sat_id)
+        satellite = await self._get_earth_satellite(sat_id=sat_id)
         times, events = satellite.find_events(self._sensor, t0=t0, t1=t1, altitude_degrees=self.min_el)
         times = [t.utc_datetime() for t in times]
         event_map = defaultdict(list)
+        key_remap = {0: "aos", 1: "tca", 2: "los"}
         for t, event in zip(times, events):
-            event_map[event].append(t)
+            event_map[key_remap[int(event)]].append(t)
         return event_map
 
-    def get_interpolated_orbit(self, sat_id, aos, los):
+    async def get_interpolated_orbit(self, sat_id: str, aos: datetime, los: datetime):
         """Calculate orbital path within observational window (AOS-LOS)
 
         Args:
@@ -158,23 +130,23 @@ class SpaceObjectTracker:
             interval = delta / (num_samples - 1)
             for i in range(num_samples):
                 t = aos + interval * i
-                obs_params = self.get_kinematic_state(sat_id, t)
+                obs_params = await self.get_kinematic_state(sat_id, t)
                 orbit["az"].append(obs_params["az"])
                 orbit["el"].append(obs_params["el"])
                 orbit["time"].append(self.utc_to_local(t).strftime("%m-%d %H:%M:%S"))
         return orbit
 
-    def precompute_orbit(self, sat_id: str) -> None:
+    async def precompute_orbit(self, sat_id: str) -> None:
         """Precompute space object orbit trajectory and AOS, TCA, LOS parameters"""
         time = datetime.now(tz=timezone.utc)
-        event_map = self.get_aos_los(sat_id=sat_id, time=time)
-        aos = self.utc_to_local(event_map[0][0]) if event_map[0] else None
-        tca = self.utc_to_local(event_map[1][0]) if event_map[1] else None
-        los = self.utc_to_local(event_map[2][0]) if event_map[2] else None
+        event_map = await self.get_aos_los(sat_id=sat_id, time=time)
+        aos = self.utc_to_local(event_map["aos"][0]) if event_map["aos"] else None
+        tca = self.utc_to_local(event_map["tca"][0]) if event_map["tca"] else None
+        los = self.utc_to_local(event_map["los"][0]) if event_map["los"] else None
         # add to aos/los dict
         self.aos_los[sat_id] = {"aos": aos, "tca": tca, "los": los}
         # add orbit to dict
-        self.orbits[sat_id] = self.get_interpolated_orbit(sat_id, aos, los)
+        self.orbits[sat_id] = await self.get_interpolated_orbit(sat_id, aos, los)
 
     @staticmethod
     def utc_to_local(time, tz="HST"):
@@ -184,15 +156,3 @@ class SpaceObjectTracker:
     @staticmethod
     def local_to_utc(time):
         return time.astimezone(timezone.utc)
-
-
-if __name__ == "__main__":
-    from pprint import pp
-
-    so_tracker = SpaceObjectTracker(Config)
-    sat_id = "39446"
-    so_tracker.precompute_orbit(sat_id=sat_id)
-    pp(so_tracker.aos_los)
-    pp(so_tracker.orbits)
-    pp(so_tracker.satellites)
-    pp(so_tracker.get_kinematic_state(sat_id))

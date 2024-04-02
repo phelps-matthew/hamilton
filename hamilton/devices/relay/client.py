@@ -17,7 +17,7 @@ class RelayTelemetryHandler(MessageHandler):
 
 
 class RelayClient(AsyncMessageNodeOperator):
-    def __init__(self, config=None):
+    def __init__(self, config: RelayClientConfig = None):
         if config is None:
             config = RelayClientConfig()
         handlers = [RelayTelemetryHandler()]

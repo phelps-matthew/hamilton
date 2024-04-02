@@ -17,7 +17,7 @@ class MountTelemetryHandler(MessageHandler):
 
 
 class MountClient(AsyncMessageNodeOperator):
-    def __init__(self, config=None):
+    def __init__(self, config: MountClientConfig = None):
         if config is None:
             config = MountClientConfig()
         handlers = [MountTelemetryHandler()]
