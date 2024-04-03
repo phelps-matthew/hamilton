@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 @dataclass
@@ -44,6 +45,7 @@ class LogConfig(MessageNodeConfig):
     root_log_dir: str = "~/hamilton/log/"
     max_log_size: int = 10 * 1024 * 1024  # 10 MB
     backup_count: int = 3
+
 
 class DBConfig(MessageNodeConfig):
     root_log_dir: str = "~/hamilton/db/"

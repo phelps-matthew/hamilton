@@ -75,20 +75,20 @@ async def main():
         response = await client.start_record(parameters)
         print(response)
 
-        time.sleep(5)
-        print(await client.status())
-        time.sleep(5)
+        time.sleep(20)
+        #print(await client.status())
+        #time.sleep(5)
 
-        response = await client.stop_record()
-        print(response)
+        #response = await client.stop_record()
+        #print(response)
 
-        parameters = {"freq": 433e6}
-        response = await client.start_record(parameters)
-        print(response)
+        #parameters = {"freq": 433e6}
+        #response = await client.start_record(parameters)
+        #print(response)
 
-        time.sleep(5)
-        print(await client.status())
-        time.sleep(5)
+        #time.sleep(5)
+        #print(await client.status())
+        #time.sleep(5)
 
         response = await client.stop_record()
         print(response)

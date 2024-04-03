@@ -1,63 +1,56 @@
 import asyncio
 import signal
 from typing import Optional
-
 from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.messaging.interfaces import MessageHandler
-from hamilton.operators.relay.client import RelayClient
-from hamilton.operators.sdr.api import SDRSigMFRecord
-from hamilton.operators.sdr.config import SDRControllerConfig
+from hamilton.operators.orchestrator.api import Orchestrator
+from hamilton.operators.orchestrator.config import OrchestatorControllerConfig
 
 
-class SDRCommandHandler(MessageHandler):
-    def __init__(self, recorder: SDRSigMFRecord, relay: RelayClient):
+class OrchestratorCommandHandler(MessageHandler):
+    def __init__(self, orchestrator: Orchestrator, interruptible_queue_tag):
         super().__init__(message_type=MessageHandlerType.COMMAND)
-        self.recorder: SDRSigMFRecord = recorder
-        self.relay: RelayClient = relay
-        self.startup_hooks = [self._start_relay]
-        self.shutdown_hooks = [self._stop_devices]
-        self.routing_key_base = "observatory.sdr.telemetry"
+        self.config = self.node_operations.config
+        self.orchestrator: Orchestrator = orchestrator
+        self.startup_hooks = [self._start_orchestrator]
+        self.shutdown_hooks = [self._stop_orchestator]
+        self.routing_key_base = "observatory.orchestrator.telemetry"
+        self.interruptable_queue_tag = interruptible_queue_tag
 
-    async def _start_relay(self):
-        await self.relay.start()
+    async def _start_orchestrator(self):
+        await self.orchestrator.start()
 
-    async def _stop_devices(self):
-        await self.recorder.stop_record()
-        await self.relay.stop()
+    async def _stop_orchestrator(self):
+        await self.orchestrator.stop()
 
     async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> None:
         response = None
         command = message["payload"]["commandType"]
         parameters = message["payload"]["parameters"]
 
-        if command == "status":
-            telemetry_type = "status"
+        if command == "enqueue_task":
+            await self.orchestrator.enqueue_task(self.orchestrator.process_task, parameters)
 
-        elif command == "start_record":
-            telemetry_type = "status"
-            if not self.recorder.is_recording:
-                self.recorder.update_parameters(parameters)
-                await self.recorder.start_record()
+        elif command == "stop":
+            await self.orchestrator.stop()
 
-        elif command == "stop_record":
+        elif command == "status":
             telemetry_type = "status"
-            await self.recorder.stop_record()
+            response = await self.orchestrator.status()
 
         if telemetry_type is not None:
-            response = self.recorder.get_status()
             routing_key = f"{self.routing_key_base}.{telemetry_type}"
             telemetry_msg = self.node_operations.msg_generator.generate_telemetry(telemetry_type, response)
             await self.node_operations.publish_message(routing_key, telemetry_msg, correlation_id)
 
 
-class SDRController(AsyncMessageNodeOperator):
-    def __init__(self, config: SDRControllerConfig = None):
+class OrchestratorController(AsyncMessageNodeOperator):
+    def __init__(self, config: OrchestatorControllerConfig = None):
         if config is None:
-            config = SDRControllerConfig()
-        relay = RelayClient()
-        recorder = SDRSigMFRecord(config=config, relay_client=relay)
-        handlers = [SDRCommandHandler(recorder, relay)]
+            config = OrchestatorControllerConfig()
+        orchestrator = Orchestrator()
+        handlers = [OrchestratorCommandHandler(orchestrator)]
         super().__init__(config, handlers)
 
 
@@ -75,7 +68,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = SDRController()
+    controller = OrchestratorController()
 
     try:
         await controller.start()
