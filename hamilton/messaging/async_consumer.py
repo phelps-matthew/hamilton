@@ -46,7 +46,7 @@ class AsyncConsumer:
         for binding in self.config.bindings:
             id = str(uuid.uuid4())
             queue_name = f"{binding.exchange}_{self.config.name}_{id}"
-            queue = await self.channel.declare_queue(queue_name)
+            queue = await self.channel.declare_queue(queue_name, auto_delete=True)
             logger.info(f"Declared queue: {queue_name}")
             self.queues.append(queue)
             for routing_key in binding.routing_keys:
