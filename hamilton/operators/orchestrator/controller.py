@@ -1,28 +1,28 @@
+
 import asyncio
 import signal
 from typing import Optional
 from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.messaging.interfaces import MessageHandler
-from hamilton.operators.orchestrator.api import Orchestrator
+from hamilton.operators.orchestrator.manager import OrchestratorManager
 from hamilton.operators.orchestrator.config import OrchestatorControllerConfig
 
 
 class OrchestratorCommandHandler(MessageHandler):
-    def __init__(self, orchestrator: Orchestrator, interruptible_queue_tag):
+    def __init__(self, manager: OrchestratorManager):
         super().__init__(message_type=MessageHandlerType.COMMAND)
         self.config = self.node_operations.config
-        self.orchestrator: Orchestrator = orchestrator
-        self.startup_hooks = [self._start_orchestrator]
-        self.shutdown_hooks = [self._stop_orchestator]
+        self.manager: OrchestratorManager = manager
+        self.startup_hooks = [self._start_manager]
+        self.shutdown_hooks = [self._stop_manager]
         self.routing_key_base = "observatory.orchestrator.telemetry"
-        self.interruptable_queue_tag = interruptible_queue_tag
 
-    async def _start_orchestrator(self):
-        await self.orchestrator.start()
+    async def _start_manager(self):
+        await self.manager.start()
 
-    async def _stop_orchestrator(self):
-        await self.orchestrator.stop()
+    async def _stop_manager(self):
+        await self.manager.stop()
 
     async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> None:
         response = None
@@ -30,14 +30,14 @@ class OrchestratorCommandHandler(MessageHandler):
         parameters = message["payload"]["parameters"]
 
         if command == "enqueue_task":
-            await self.orchestrator.enqueue_task(self.orchestrator.process_task, parameters)
+            await self.manager.enqueue_task(self.manager.process_task, parameters)
 
         elif command == "stop":
-            await self.orchestrator.stop()
+            await self.manager.stop()
 
         elif command == "status":
             telemetry_type = "status"
-            response = await self.orchestrator.status()
+            response = await self.manager.status()
 
         if telemetry_type is not None:
             routing_key = f"{self.routing_key_base}.{telemetry_type}"
@@ -49,8 +49,8 @@ class OrchestratorController(AsyncMessageNodeOperator):
     def __init__(self, config: OrchestatorControllerConfig = None):
         if config is None:
             config = OrchestatorControllerConfig()
-        orchestrator = Orchestrator()
-        handlers = [OrchestratorCommandHandler(orchestrator)]
+        manager = OrchestratorManager()
+        handlers = [OrchestratorCommandHandler(manager)]
         super().__init__(config, handlers)
 
 

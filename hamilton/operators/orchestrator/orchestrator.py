@@ -8,67 +8,38 @@
 """
 
 import asyncio
-from hamilton.operators.orchestrator.operator import Operator
+import logging
+from hamilton.operators.astrodynamics.client import AstrodynamicsClient
+from hamilton.operators.radiometrics.client import RadiometricsClient
+from hamilton.operators.mount.client import MountClient
+from hamilton.operators.sdr.client import SDRClient
+from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
+
+logger = logging.getLogger(__name__)
 
 
 class Orchestrator:
-    def __init__(self, operator: Operator):
-        self.operator: Operator = operator
-        self.task_queue = asyncio.Queue()
-        self.shutdown_event = asyncio.Event()
-        self.current_task = None
-        self.processed_tasks_count = 0
+    def __init__(self):
+        try:
+            self.sdr: AsyncMessageNodeOperator = SDRClient()
+            self.astrodynamics: AsyncMessageNodeOperator = AstrodynamicsClient()
+            self.radiometrics: AsyncMessageNodeOperator = RadiometricsClient()
+            self.mount: AsyncMessageNodeOperator = MountClient()
+        except Exception as e:
+            logger.error(f"An error occured while initializing clients: {e}")
+
+        self.client_list: list[AsyncMessageNodeOperator] = [self.sdr, self.astrodynamics, self.radiometrics, self.mount]
 
     async def start(self):
-        """Start the orchestrator."""
-        self.shutdown_event.clear()
-        asyncio.create_task(self._run())
-
-    async def _run(self):
-        """Main loop to process tasks."""
-        while not self.shutdown_event.is_set():
+        for client in self.client_list:
             try:
-                task_parameters = await self.task_queue.get()
-                self.current_task = asyncio.create_task(self.process_task(task_parameters))
-                await self.current_task
-            except asyncio.CancelledError:
-                # Handle task cancellation gracefully
-                pass
-            finally:
-                self.task_queue.task_done()
-                self.current_task = None
-                self.processed_tasks_count += 1
-
-    async def process_task(self, parameters: dict):
-        """Process a single task."""
-        print(f"Processing task with parameters: {parameters}")
-        await asyncio.sleep(1)  # Simulate task processing
-
-    async def enqueue_task(self, parameters):
-        """Add tasks to the queue."""
-        await self.task_queue.put(parameters)
+                await client.start()
+            except Exception as e:
+                logger.error(f"An error occured while starting {client}: {e}")
 
     async def stop(self):
-        """Immediately stop the orchestrator, cancelling any ongoing task."""
-        self.shutdown_event.set()
-        if self.current_task:
-            self.current_task.cancel()
-            await self.current_task
-
-    async def soft_stop(self):
-        """Allow the current task to finish before stopping."""
-        self.shutdown_event.set()
-
-    def status(self):
-        """Return the current status of the Orchestrator."""
-        if self.shutdown_event.is_set():
-            status = "stopped"
-        elif self.current_task and not self.current_task.done():
-            status = "running"
-        else:
-            status = "idle"
-        return {
-            "status": status,
-            "tasks_in_queue": self.task_queue.qsize(),
-            "tasks_processed": self.processed_tasks_count,
-        }
+        for client in self.client_list:
+            try:
+                await client.stop()
+            except Exception as e:
+                logger.error(f"An error occured while stopping {client}: {e}")
