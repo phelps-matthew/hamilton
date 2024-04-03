@@ -18,18 +18,18 @@ class ServiceViewerControllerConfig(MessageNodeConfig):
         ),
     ]
     SERVICES = [
-        "hamilton-log-collector",
-        "hamilton-mount-controller",
-        "hamilton-service-manager",
+        "hamilton-astrodynamics",
         "hamilton-database-update",
         "hamilton-database-query",
-        "hamilton-astrodynamics",
+        "hamilton-log-collector",
+        "hamilton-mount-controller",
         "hamilton-radiometrics",
         "hamilton-relay-controller",
         "hamilton-sdr-controller",
+        "hamilton-service-viewer",
     ]
 
-    UPDATE_INTERVAL = 20 # seconds
+    UPDATE_INTERVAL = 60 * 5 # seconds
 
 class ServiceViewerClientConfig(MessageNodeConfig):
     name = "ServiceViewerClient"

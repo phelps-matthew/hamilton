@@ -1,13 +1,13 @@
 [Unit]
 Description=Database Query Service
-Requires=rabbitmq-server.service hamilton-log-collector.service 
+Requires=rabbitmq-server.service
 After=network.target rabbitmq-server.service hamilton-log-collector.service 
 
 [Service]
 User=mgp
-ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/database/db_query.py
+ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/operators/database/controller.py
 Restart=on-failure
-WorkingDirectory=/home/mgp/dev/hamilton/hamilton/database/
+WorkingDirectory=/home/mgp/dev/hamilton/hamilton/operators/database/
 
 [Install]
 WantedBy=multi-user.target

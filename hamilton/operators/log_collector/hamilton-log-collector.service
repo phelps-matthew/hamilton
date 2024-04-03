@@ -5,9 +5,9 @@ After=network.target rabbitmq-server.service
 
 [Service]
 User=mgp
-ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/logging/log_collector.py
+ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/operators/log_collector/controller.py
 Restart=on-failure
-WorkingDirectory=/home/mgp/dev/hamilton/hamilton/logging/
+WorkingDirectory=/home/mgp/dev/hamilton/hamilton/operators/log_collector/
 
 [Install]
 WantedBy=multi-user.target

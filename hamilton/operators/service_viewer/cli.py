@@ -4,6 +4,7 @@ import argparse
 import asyncio
 from hamilton.operators.service_viewer.client import ServiceViewerClient
 import logging
+import json
 
 
 root_logger = logging.getLogger()
@@ -16,7 +17,7 @@ async def handle_command(service):
     try:
         await client.start()
         response = await client.status(service)
-        print(response)
+        print(json.dumps(response, indent=4))
     finally:
         await client.stop()
 

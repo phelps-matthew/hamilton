@@ -1,13 +1,13 @@
 [Unit]
 Description=Mount Controller Service
-Requires=rabbitmq-server.service hamilton-log-collector.service 
+Requires=rabbitmq-server.service
 After=network.target rabbitmq-server.service hamilton-log-collector.service 
 
 [Service]
 User=mgp
-ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/devices/mount/controller.py
+ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/operators/mount/controller.py
 Restart=on-failure
-WorkingDirectory=/home/mgp/dev/hamilton/hamilton/devices/mount/
+WorkingDirectory=/home/mgp/dev/hamilton/hamilton/operators/mount/
 
 [Install]
 WantedBy=multi-user.target

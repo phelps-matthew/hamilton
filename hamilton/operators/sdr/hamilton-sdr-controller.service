@@ -1,13 +1,13 @@
 [Unit]
 Description=SDR Controller Service
-Requires=rabbitmq-server.service hamilton-log-collector.service 
-After=network.target rabbitmq-server.service hamilton-log-collector.service 
+Requires=rabbitmq-server.service hamilton-relay-controller.service
+After=network.target rabbitmq-server.service hamilton-log-collector.service hamilton-relay-controller.service
 
 [Service]
 User=mgp
-ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/devices/sdr/controller.py
+ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/operators/sdr/controller.py
 Restart=on-failure
-WorkingDirectory=/home/mgp/dev/hamilton/hamilton/devices/sdr/
+WorkingDirectory=/home/mgp/dev/hamilton/hamilton/operators/sdr/
 
 [Install]
 WantedBy=multi-user.target

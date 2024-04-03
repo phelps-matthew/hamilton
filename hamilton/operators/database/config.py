@@ -15,7 +15,7 @@ class DBUpdaterConfig(DBConfig):
             ],
         ),
     )
-    UPDATE_INTERVAL = 3600  # Update every hour
+    UPDATE_INTERVAL = 60 * 60 * 6  # Update every six hours
     SATNOGS_TRANSMITTERS_URL = "https://db.satnogs.org/api/transmitters/?format=json"
     SATNOGS_SATELLITES_URL = "https://db.satnogs.org/api/satellites/?format=json"
     SATNOGS_TLE_URL = "https://db.satnogs.org/api/tle/?format=json"

@@ -1,21 +1,17 @@
 #!/bin/bash
 
-# Path to the directory containing .service files
-SERVICE_DIR="/home/mgp/dev/hamilton/hamilton/systemd"
+# Define a pattern for the service names of interest
+SERVICE_PATTERN="hamilton-*"
 
 # Define a separator for readability
 SEPARATOR=$(printf '%*s\n' 50 '' | tr ' ' '-')
 
-# Loop through all .service files in the directory
-for service_file in "$SERVICE_DIR"/*.service; do
-    # Extract the service name from the file name
-    service_name=$(basename "$service_file" .service)
-    
+# Use systemctl to list units matching the pattern, then iterate over them
+systemctl list-units --type=service --state=loaded,active,inactive,failed | grep "$SERVICE_PATTERN" | awk '{print $1}' | while read -r service_name; do
     # Print the status of the service
     echo "$SEPARATOR"
     echo "Status of $service_name:"
     echo "$SEPARATOR"
     sudo systemctl status --no-pager -n 10 "$service_name"
-    #sudo systemctl status "$service_name"
     echo ""  # Add an empty line for readability
 done

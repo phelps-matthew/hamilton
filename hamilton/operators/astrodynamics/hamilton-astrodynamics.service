@@ -1,13 +1,13 @@
 [Unit]
 Description=Astrodynamics Service
-Requires=rabbitmq-server.service hamilton-log-collector.service 
-After=network.target rabbitmq-server.service hamilton-log-collector.service hamilton-database-query.service
+Requires=rabbitmq-server.service hamilton-database-query.service
+After=network.target rabbitmq-server.service hamilton-database-query.service hamilton-log-collector.service
 
 [Service]
 User=mgp
-ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/astrodynamics/controller.py
+ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/operators/astrodynamics/controller.py
 Restart=on-failure
-WorkingDirectory=/home/mgp/dev/hamilton/hamilton/astrodynamics/
+WorkingDirectory=/home/mgp/dev/hamilton/hamilton/operators/astrodynamics
 
 [Install]
 WantedBy=multi-user.target
