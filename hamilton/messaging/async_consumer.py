@@ -1,6 +1,7 @@
 import aio_pika
 import json
 import logging
+import uuid
 from aio_pika import IncomingMessage
 from hamilton.base.config import MessageNodeConfig
 from hamilton.messaging.rpc_manager import RPCManager
@@ -43,7 +44,8 @@ class AsyncConsumer:
 
     async def _setup_bindings(self):
         for binding in self.config.bindings:
-            queue_name = f"{binding.exchange}_{self.config.name}"
+            id = str(uuid.uuid4())
+            queue_name = f"{binding.exchange}_{self.config.name}_{id}"
             queue = await self.channel.declare_queue(queue_name)
             logger.info(f"Declared queue: {queue_name}")
             self.queues.append(queue)

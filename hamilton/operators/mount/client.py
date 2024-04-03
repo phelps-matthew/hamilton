@@ -71,6 +71,7 @@ async def main():
 
         response = await client.status()
         print(response)
+
         response = await client.stop_rotor()
         print(response)
 
