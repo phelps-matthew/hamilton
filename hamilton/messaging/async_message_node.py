@@ -8,6 +8,7 @@ Any I/O operations are to be implemented as async methods. This includes any I/O
 file I/O or network I/O.
 """
 
+import asyncio
 import logging
 from typing import Any, Callable, Optional
 
@@ -27,7 +28,7 @@ class AsyncMessageNode(IMessageNodeOperations):
         self.config: MessageNodeConfig = config
         self.rpc_manager: RPCManager = RPCManager()
         self.consumer: AsyncConsumer = AsyncConsumer(config, self.rpc_manager, handlers)
-        self.publisher: AsyncProducer = AsyncProducer(config, self.rpc_manager)
+        self.producer: AsyncProducer = AsyncProducer(config, self.rpc_manager)
         self._msg_generator: MessageGenerator = MessageGenerator(config.name, config.message_version)
         self.startup_hooks: list[Callable[[], None]] = []
         self.shutdown_hooks: list[Callable[[], None]] = []
@@ -41,6 +42,7 @@ class AsyncMessageNode(IMessageNodeOperations):
     async def start(self):
         """Starts the consumer and publisher asynchronously."""
         await self.consumer.start_consuming()
+        await self.producer.start()
         logger.info("Started the consumer and publisher asynchronously.")
         logger.info("Invoking startup hooks...")
         for hook in self.startup_hooks:
@@ -50,7 +52,7 @@ class AsyncMessageNode(IMessageNodeOperations):
     async def stop(self):
         """Stops the consumer and publisher asynchronously."""
         await self.consumer.stop()
-        await self.publisher.stop()
+        await self.producer.stop()
         logger.info("Stopped the consumer and publisher asynchronously.")
         logger.info("Invoking shutdown hooks...")
         for hook in self.shutdown_hooks:
@@ -59,11 +61,11 @@ class AsyncMessageNode(IMessageNodeOperations):
 
     async def publish_message(self, routing_key: str, message: Message, corr_id: Optional[str] = None):
         """Publishes a message asynchronously."""
-        await self.publisher.publish(routing_key, message, corr_id)
+        await self.producer.publish(routing_key, message, corr_id)
 
     async def publish_rpc_message(self, routing_key: str, message: Message, timeout: int = 10) -> Any:
         """Sends an RPC message and waits for the response."""
-        return await self.publisher.publish_rpc_message(routing_key, message, timeout)
+        return await self.producer.publish_rpc_message(routing_key, message, timeout)
 
     @property
     def msg_generator(self) -> MessageGenerator:

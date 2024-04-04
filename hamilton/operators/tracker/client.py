@@ -6,7 +6,7 @@ from hamilton.base.messages import MessageHandlerType, Message
 from hamilton.operators.tracker.config import TrackerClientConfig
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.messaging.interfaces import MessageHandler
-from hamilton.base.task import Task
+from hamilton.base.task import Task, TaskGenerator
 
 
 class TrackerTelemetryHandler(MessageHandler):
@@ -25,11 +25,11 @@ class TrackerClient(AsyncMessageNodeOperator):
         super().__init__(config, handlers)
         self.routing_key_base = "observatory.tracker.command"
 
-    async def _publish_command(self, command: str, parameters: dict, rpc: bool = True) -> dict:
+    async def _publish_command(self, command: str, parameters: dict, rpc: bool = True, timeout: int = 10) -> dict:
         routing_key = f"{self.routing_key_base}.{command}"
         message = self.msg_generator.generate_command(command, parameters)
         if rpc:
-            response = await self.publish_rpc_message(routing_key, message)
+            response = await self.publish_rpc_message(routing_key, message, timeout=timeout)
         else:
             response = await self.publish_message(routing_key, message)
         return response
@@ -42,12 +42,12 @@ class TrackerClient(AsyncMessageNodeOperator):
     async def slew_to_aos(self, task: Task):
         command = "slew_to_aos"
         parameters = task
-        return await self._publish_command(command, parameters, rpc=False)
+        return await self._publish_command(command, parameters, rpc=True, timeout=60)
 
     async def slew_to_home(self):
         command = "slew_to_home"
         parameters = {}
-        return await self._publish_command(command, parameters, rpc=False)
+        return await self._publish_command(command, parameters, rpc=True, timeout=60)
 
     async def stop(self):
         command = "stop"
@@ -75,9 +75,23 @@ async def main():
 
     # Application setup
     client = TrackerClient()
+    task_generator = TaskGenerator()
 
     try:
         await client.start()
+        await task_generator.start()
+
+        sat_id = "57203"
+        task = await task_generator.generate_task(sat_id)
+
+        response = await client.status()
+        print(response)
+
+        response = await client.slew_to_home()
+        print(response)
+
+        response = await client.slew_to_aos(task)
+        print(response)
 
         response = await client.status()
         print(response)

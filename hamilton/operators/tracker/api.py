@@ -51,7 +51,7 @@ class Tracker:
     async def stop_tracking(self):
         """Stop the tracking loop and reset tracking status."""
         self.shutdown_event.set()
-        await self.mount.stop_rotor(rpc=False)
+        await self.mount.stop_rotor()
         self.is_tracking = False
         logger.info("Tracking routine has been successfully stopped.")
 
@@ -59,22 +59,23 @@ class Tracker:
         """Idempotently initialize active task parameters"""
         self.task = task
         az_rate_aos = task["parameters"]["aos"]["kinematic_state"]["az_rate"]
-        precomputed_orbit = task["precomputed_orbit"]
+        interpolated_orbit = task["parameters"]["interpolated_orbit"]
         self.aos_rotor_angles = AOSPath.get_aos_rotor_angles(
-            az_rate_aos=az_rate_aos, precomputed_orbit=precomputed_orbit
+            az_rate_aos=az_rate_aos, interpolated_orbit=interpolated_orbit
         )
         self.sat_id = task["parameters"]["sat_id"]
 
     async def slew_and_wait(self, az, el, angular_tolerance=0.25):
         """Rotate to a specific azimuth and elevation and wait until the position is reached."""
         az, el = self._safe_az_el(az, el)
-        await self.mount.set(az, el, rpc=False)
+        await self.mount.set(az, el)
         try:
-            logger.info(f"Slewing to azimuth: {az:<6.2f}, elevation: {el:<6.2f}")
+            logger.info(f"Slewing to azimuth: {az}, elevation: {el}")
             self.is_tracking = True
             while not self.shutdown_event.is_set():
-                current_az, current_el = await self.mount.status()
-                logger.info(f"Status, AZ_ROT: {current_az:<6.2f}, EL_ROT: {current_el:<6.2f}")
+                response = await self.mount.status()
+                current_az, current_el = response["azimuth"], response["elevation"]
+                logger.info(f"Status, az_rotator: {current_az}, el_rotator: {current_el}")
                 az_err = az - current_az
                 if az_err >= 360:
                     az_err = az_err % 360
@@ -93,7 +94,7 @@ class Tracker:
     async def slew_to_home(self):
         az, el = self.config.az_home, self.config.el_home
         logger.info("Slewing to home.")
-        await self.slew_and_wait(az, el)
+        return await self.slew_and_wait(az, el)
 
     async def slew_to_aos(self):
         """Rotate to position ready for acquisition of signal. Must call before tracking satellite."""
@@ -101,7 +102,7 @@ class Tracker:
         logger.info("Slewing to *half* AOS")
         await self.slew_and_wait(az_aos_half, el_aos)
         logger.info("Positioning rotator for AOS")
-        await self.slew_and_wait(az_aos, el_aos)
+        return await self.slew_and_wait(az_aos, el_aos)
 
     async def track(self):
         """Track a space object until it reaches a minimum elevation or is manually stopped."""
@@ -115,7 +116,7 @@ class Tracker:
                     await asyncio.sleep(self.slew_interval)
                     continue
                 az, el = self._safe_az_el(kinematic_state["az"], kinematic_state["el"])
-                await self.mount.set(az, el, rpc=False)
+                await self.mount.set(az, el)
                 await asyncio.sleep(self.slew_interval)
             self.is_tracking = False
             logger.info("Tracking completed.")
@@ -178,12 +179,12 @@ class AOSPath:
         return total_distance
 
     @staticmethod
-    def max_rotor_travel(az_rate_aos: float, precomputed_orbit: dict[str, float]):
+    def max_rotor_travel(az_rate_aos: float, interpolated_orbit: dict[str, float]):
         """Given an orbital pass, compute the furthest absolute angular extent an azimuth rotor must travel"""
         clockwise_orbit = az_rate_aos > 0
-        az_aos = precomputed_orbit["az"][0]
-        el_aos = precomputed_orbit["el"][0]
-        az_list = precomputed_orbit["az"]
+        az_aos = interpolated_orbit["az"][0]
+        el_aos = interpolated_orbit["el"][0]
+        az_list = interpolated_orbit["az"]
 
         # compute angle from home to az_aos
         phi_aos_home_cw = AOSPath._clockwise_angle(az_aos) - 270
@@ -207,11 +208,11 @@ class AOSPath:
         return phi_max_cw, phi_max_ccw, az_aos, el_aos
 
     @staticmethod
-    def get_aos_rotor_angles(az_rate_aos: float, precomputed_orbit: dict[str, float]):
+    def get_aos_rotor_angles(az_rate_aos: float, interpolated_orbit: dict[str, float]):
         """Compute initial aos rotor angles for rotor prepositioning, taking into account whether to
         traverse cw or ccw relative to home."""
 
-        phi_max_cw, phi_max_ccw, az_aos, el_aos = AOSPath.max_rotor_travel(az_rate_aos, precomputed_orbit)
+        phi_max_cw, phi_max_ccw, az_aos, el_aos = AOSPath.max_rotor_travel(az_rate_aos, interpolated_orbit)
 
         if (phi_max_cw > 270) and (phi_max_ccw > 270):
             raise InvalidOrbitException("Angular travel exceeds maximum for cw or ccw traversal")

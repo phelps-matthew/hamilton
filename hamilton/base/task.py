@@ -1,6 +1,12 @@
-from typing import TypedDict, Union, Dict, Any
-from datetime import datetime, UTC
+from typing import TypedDict, Union, Dict, Any, Optional
+from datetime import datetime, UTC, timezone
 from enum import Enum
+from hamilton.operators.astrodynamics.client import AstrodynamicsClient
+from hamilton.operators.radiometrics.client import RadiometricsClient
+import logging
+import uuid
+
+logger = logging.getLogger(__name__)
 
 
 class TaskType(Enum):
@@ -25,16 +31,69 @@ class Task(TypedDict):
 
 
 class TaskGenerator:
-    @staticmethod
-    def generate_task(sat_id: str) -> Task:
+    def __init__(self):
+        try:
+            self.radiometrics: RadiometricsClient = RadiometricsClient()
+            self.astrodynamics: AstrodynamicsClient = AstrodynamicsClient()
+        except Exception as e:
+            logger.error(f"An error occurred while initializing clients: {e}")
+        self.client_list = [self.radiometrics, self.astrodynamics]
+
+    async def start(self):
+        logger.info("Starting clients.")
+        for client in self.client_list:
+            try:
+                await client.start()
+            except Exception as e:
+                logger.error(f"An error occurred while starting {client}: {e}")
+
+    async def stop(self):
+        logger.info("Stopping clients.")
+        for client in self.client_list:
+            try:
+                await client.stop()
+            except Exception as e:
+                logger.error(f"An error occurred while stopping {client}: {e}")
+
+    async def generate_task(self, sat_id: str) -> Optional[Task]:
+        aos_los = await self.astrodynamics.get_aos_los(sat_id)
+        interpolated_orbit = await self.astrodynamics.get_interpolated_orbit(sat_id)
+        downlink_freqs = await self.radiometrics.get_downlink_freqs(sat_id)
+
         task = {
             "source": "hamilton",
             "timestamp": datetime.now().isoformat(),
             "task_id": str(uuid.uuid4()),
             "task_type": "leo_track",
-            "parameters": None,
+            "parameters": {
+                "sat_id": sat_id,
+                "aos": aos_los.get("aos", None),
+                "tca": aos_los.get("tca", None),
+                "los": aos_los.get("los", None),
+                "sdr": {"sat_id": sat_id, "freq": downlink_freqs[0]},
+                "interpolated_orbit": interpolated_orbit,
+            },
         }
+        print("test123")
 
+        if self.validate_task(task):
+            return task
+        else:
+            logger.error(f"Generated task for {sat_id} is invalid.")
+            return None
 
+    def validate_task(self, task: Task) -> bool:
+        parameters = task["parameters"]
+        if not parameters:
+            return False
+        try:
+            aos_time = parameters["aos"]["time"]
+            los_time = parameters["los"]["time"]
+        except KeyError:
+            return False
+        current_time = datetime.now(timezone.utc)
 
-
+        if aos_time and los_time and aos_time < los_time and los_time > current_time:
+            return True
+        else:
+            return False

@@ -36,17 +36,19 @@ class TrackerCommandHandler(MessageHandler):
                 await self.tracker.track()
 
         elif command == "slew_to_home":
-            telemetry_type = None
+            telemetry_type = "status"
             if not self.tracker.is_tracking:
                 await self.tracker.clear_shutdown_event()
                 await self.tracker.slew_to_home()
+                response = {}
 
         elif command == "slew_to_aos":
-            telemetry_type = None
+            telemetry_type = "status"
             if not self.tracker.is_tracking:
                 await self.tracker.clear_shutdown_event()
                 await self.tracker.setup_task(parameters)
                 await self.tracker.slew_to_aos()
+                response = {}
 
         elif command == "stop":
             telemetry_type = None

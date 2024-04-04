@@ -1,3 +1,4 @@
+import asyncio
 import aio_pika
 import json
 import logging
@@ -97,6 +98,11 @@ class AsyncProducer:
         finally:
             self.rpc_manager.cleanup(corr_id)
             logger.debug("RPC call cleanup completed.")
+
+    async def start(self):
+        logger.info("Starting the producer...")
+        if not self.connection or not self.channel:
+            await self._connect()
 
     async def stop(self):
         """Closes the connection."""
