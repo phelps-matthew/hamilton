@@ -11,7 +11,8 @@ hamilton/
 │   │       ├── response-schema-v1-0-0.json
 │   │       └── telemetry-schema-v1-0-0.json
 │   ├── config.py
-│   └── messages.py
+│   ├── messages.py
+│   └── task.py
 │
 ├── common/
 │   ├── logging_config.json
@@ -63,11 +64,12 @@ hamilton/
 │   │   ├── config.py
 │   │   ├── controller.py
 │   │   └── hamilton-mount-controller.service
-│   ├── observatory_operation/
+│   ├── orchestrator/
+│   │   ├── client.py
 │   │   ├── config.py
-│   │   └── controller.py
-│   ├── orchestration/
-│   │   └── orchestrate.py
+│   │   ├── controller.py
+│   │   ├── manager.py
+│   │   └── orchestrator.py
 │   ├── radiometrics/
 │   │   ├── api.py
 │   │   ├── client.py
@@ -81,6 +83,11 @@ hamilton/
 │   │   ├── config.py
 │   │   ├── controller.py
 │   │   └── hamilton-relay-controller.service
+│   ├── scheduler/
+│   │   ├── api.py
+│   │   ├── client.py
+│   │   ├── config.py
+│   │   └── controller.py
 │   ├── sdr/
 │   │   ├── flowgraphs/
 │   │   │   └── record_sigmf.py
@@ -90,12 +97,17 @@ hamilton/
 │   │   ├── config.py
 │   │   ├── controller.py
 │   │   └── hamilton-sdr-controller.service
-│   └── service_viewer/
-│       ├── cli.py
+│   ├── service_viewer/
+│   │   ├── cli.py
+│   │   ├── client.py
+│   │   ├── config.py
+│   │   ├── controller.py
+│   │   └── hamilton-service-viewer.service
+│   └── tracker/
+│       ├── api.py
 │       ├── client.py
 │       ├── config.py
-│       ├── controller.py
-│       └── hamilton-service-viewer.service
+│       └── controller.py
 │
 ├── tools/
 │   ├── repo_tree.py
