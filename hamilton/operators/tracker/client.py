@@ -34,23 +34,28 @@ class TrackerClient(AsyncMessageNodeOperator):
             response = await self.publish_message(routing_key, message)
         return response
 
-    async def status(self):
-        command = "status"
-        parameters = {}
-        return await self._publish_command(command, parameters)
+    async def track(self, task: Task):
+        command = "track"
+        parameters = task
+        return await self._publish_command(command, parameters, rpc=False)
+
+    async def slew_to_aos(self, task: Task):
+        command = "slew_to_aos"
+        parameters = task
+        return await self._publish_command(command, parameters, rpc=False)
 
     async def slew_to_home(self):
         command = "slew_to_home"
         parameters = {}
-        return await self._publish_command(command, parameters)
-
-    async def process_task(self, task: Task):
-        command = "process_task"
-        parameters = task
-        return await self._publish_command(command, parameters)
+        return await self._publish_command(command, parameters, rpc=False)
 
     async def stop(self):
         command = "stop"
+        parameters = {}
+        return await self._publish_command(command, parameters, rpc=False)
+
+    async def status(self):
+        command = "status"
         parameters = {}
         return await self._publish_command(command, parameters)
 

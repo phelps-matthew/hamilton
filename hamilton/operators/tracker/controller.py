@@ -28,26 +28,33 @@ class TrackerCommandHandler(MessageHandler):
         command = message["payload"]["commandType"]
         parameters = message["payload"]["parameters"]
 
-        if command == "process_task":
+        if command == "track":
             telemetry_type = None
             if not self.tracker.is_tracking:
+                await self.tracker.clear_shutdown_event()
                 await self.tracker.setup_task(parameters)
-                await self.tracker.slew_to_home()
-                await self.tracker.slew_to_aos()
                 await self.tracker.track()
-
-        elif command == "status":
-            telemetry_type = "status"
-            response = await self.tracker.status()
 
         elif command == "slew_to_home":
             telemetry_type = None
             if not self.tracker.is_tracking:
+                await self.tracker.clear_shutdown_event()
                 await self.tracker.slew_to_home()
+
+        elif command == "slew_to_aos":
+            telemetry_type = None
+            if not self.tracker.is_tracking:
+                await self.tracker.clear_shutdown_event()
+                await self.tracker.setup_task(parameters)
+                await self.tracker.slew_to_aos()
 
         elif command == "stop":
             telemetry_type = None
             await self.tracker.stop_tracking()
+
+        elif command == "status":
+            telemetry_type = "status"
+            response = await self.tracker.status()
 
         if telemetry_type is not None:
             routing_key = f"{self.routing_key_base}.{telemetry_type}"
