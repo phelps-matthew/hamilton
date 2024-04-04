@@ -30,6 +30,9 @@ class Config:
     VHF_HIGH: float = 150e6
     UHF_LOW: float = 410e6
     UHF_HIGH: float = 440e6
+    az_home: float = 270.0
+    el_home: float = 90.0
+    el_min: float = 10.0
 
 
 class MessageNodeConfig(Config):
