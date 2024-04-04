@@ -1,0 +1,13 @@
+[Unit]
+Description=Tracker Service
+Requires=rabbitmq-server.service hamilton-astrodynamics.service hamilton-mount-controller.service
+After=network.target rabbitmq-server.service hamilton-log-collector.service hamilton-astrodynamics.service hamilton-mount-controller.service
+
+[Service]
+User=mgp
+ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/operators/tracker/controller.py
+Restart=on-failure
+WorkingDirectory=/home/mgp/dev/hamilton/hamilton/operators/tracker/
+
+[Install]
+WantedBy=multi-user.target
