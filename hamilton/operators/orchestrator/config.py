@@ -30,9 +30,9 @@ class OrchestratorClientConfig(MessageNodeConfig):
             exchange="orchestrator",
             rpc=True,
             routing_keys=[
-                "observatory.orchestrator.command.enqueue_task",
-                "observatory.orchestrator.command.status",
+                "observatory.orchestrator.command.orchestrate",
                 "observatory.orchestrator.command.stop",
+                "observatory.orchestrator.command.status",
             ],
         ),
     ]

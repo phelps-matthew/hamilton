@@ -1,19 +1,10 @@
-"""
-1) Astrodynamics: Precompute orbit (for computing mount path?)
-2) Radiometrics: Get downlink tx frequency
-3) Precompute mount path direction. 
-4) Position mount to ready position. (Preposition)
-5) When elevation limits aren't violated, start tracking until end of pass. Signal tracking. Start recording.
-6) Stop recording. Position mount to home. (Post position) Signal non-active.
-"""
-
 import asyncio
 from hamilton.operators.orchestrator.orchestrator import Orchestrator
 
 
 class OrchestratorManager:
-    def __init__(self, operator: Orchestrator):
-        self.operator: Orchestrator = operator
+    def __init__(self, orchestrator: Orchestrator):
+        self.orchestrator: Orchestrator = orchestrator
         self.task_queue = asyncio.Queue()
         self.shutdown_event = asyncio.Event()
         self.current_task = None
