@@ -11,8 +11,6 @@ from datetime import datetime, timezone
 import asyncio
 import logging
 from hamilton.operators.astrodynamics.client import AstrodynamicsClient
-from hamilton.operators.radiometrics.client import RadiometricsClient
-from hamilton.operators.mount.client import MountClient
 from hamilton.operators.sdr.client import SDRClient
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.operators.tracker.client import TrackerClient
@@ -25,9 +23,6 @@ class Orchestrator:
     def __init__(self):
         try:
             self.sdr: SDRClient = SDRClient()
-            self.astrodynamics: AstrodynamicsClient = AstrodynamicsClient()
-            self.radiometrics: RadiometricsClient = RadiometricsClient()
-            self.mount: MountClient = MountClient()
             self.tracker: TrackerClient = TrackerClient()
         except Exception as e:
             logger.error(f"An error occured while initializing clients: {e}")
@@ -35,7 +30,7 @@ class Orchestrator:
         self.is_running = False
         self.shutdown_event = asyncio.Event()
         self.task: Task = None
-        self.client_list: list[AsyncMessageNodeOperator] = [self.sdr, self.astrodynamics, self.radiometrics, self.mount]
+        self.client_list: list[AsyncMessageNodeOperator] = [self.sdr, self.tracker]
 
     async def start(self):
         logger.info("Starting Orchestrator.")

@@ -5,7 +5,7 @@ from typing import Optional
 from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.messaging.interfaces import MessageHandler
-from hamilton.operators.orchestrator.orchestrator import Orchestrator
+from hamilton.operators.orchestrator.api import Orchestrator
 from hamilton.operators.orchestrator.config import OrchestatorControllerConfig
 
 
@@ -14,14 +14,14 @@ class OrchestratorCommandHandler(MessageHandler):
         super().__init__(message_type=MessageHandlerType.COMMAND)
         self.config = self.node_operations.config
         self.orchestrator: Orchestrator = orchestrator
-        self.startup_hooks = [self._start_manager]
-        self.shutdown_hooks = [self._stop_manager]
+        self.startup_hooks = [self._start_orchestrator]
+        self.shutdown_hooks = [self._stop_orchestrator]
         self.routing_key_base = "observatory.orchestrator.telemetry"
 
-    async def _start_manager(self):
+    async def _start_orchestrator(self):
         await self.orchestrator.start()
 
-    async def _stop_manager(self):
+    async def _stop_orchestrator(self):
         await self.orchestrator.stop()
 
     async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> None:
