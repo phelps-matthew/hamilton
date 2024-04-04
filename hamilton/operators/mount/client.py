@@ -38,15 +38,15 @@ class MountClient(AsyncMessageNodeOperator):
         parameters = {}
         return await self._publish_command(command, parameters)
 
-    async def set(self, az, el, rpc=True):
+    async def set(self, az, el):
         command = "set"
         parameters = {"azimuth": az, "elevation": el}
-        return await self._publish_command(command, parameters, rpc)
+        return await self._publish_command(command, parameters, rpc=False)
 
-    async def stop_rotor(self, rpc=True):
+    async def stop_rotor(self):
         command = "stop"
         parameters = {}
-        return await self._publish_command(command, parameters, rpc)
+        return await self._publish_command(command, parameters, rpc=False)
 
 
 shutdown_event = asyncio.Event()
