@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Any
 
 import pytz
 from skyfield.api import EarthSatellite, load, wgs84
@@ -80,7 +80,7 @@ class SpaceObjectTracker:
 
         return kinematic_state
 
-    async def get_aos_los(self, sat_id, time=None, delta_t=12) -> dict[int, ]:
+    async def get_aos_los(self, sat_id, time=None, delta_t=12) -> dict[str, dict[str, datetime]]:
         """Calculate acquisition of signal (AOS) and loss of signal (LOS) times
 
         Args:
@@ -120,7 +120,9 @@ class SpaceObjectTracker:
 
         return full_event_map
 
-    async def get_interpolated_orbit(self, sat_id: str, aos: Optional[datetime] = None, los: Optional[datetime] = None):
+    async def get_interpolated_orbit(
+        self, sat_id: str, aos: Optional[datetime] = None, los: Optional[datetime] = None
+    ) -> dict[str, list[Any]]:
         """Calculate orbital path within observational window (AOS-LOS)
 
         Args:

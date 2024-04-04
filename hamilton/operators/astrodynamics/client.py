@@ -44,12 +44,14 @@ class AstrodynamicsClient(AsyncMessageNodeOperator):
 
     async def get_aos_los(
         self, sat_id: str, time: Optional[datetime] = None, delta_t: int = 12
-    ) -> dict[int, list[datetime]]:
+    ) -> dict[str, Any]:
         command = "get_aos_los"
         parameters = {"sat_id": sat_id, "time": time, "delta_t": delta_t}
         return await self._publish_command(command, parameters)
 
-    async def get_interpolated_orbit(self, sat_id: str, aos: datetime, los: datetime) -> dict[str, list]:
+    async def get_interpolated_orbit(
+        self, sat_id: str, aos: Optional[datetime] = None, los: Optional[datetime] = None
+    ) -> dict[str, list[Any]]:
         command = "get_interpolated_orbit"
         parameters = {"sat_id": sat_id, "aos": aos, "los": los}
         return await self._publish_command(command, parameters)
