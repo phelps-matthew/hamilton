@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import pytz
 from skyfield.api import EarthSatellite, load, wgs84
@@ -80,7 +81,7 @@ class SpaceObjectTracker:
         return kinematic_state
 
     async def get_aos_los(self, sat_id, time=None, delta_t=12) -> dict[int, ]:
-        """Cacluate acquisition of signal (AOS) and loss of signal (LOS) times
+        """Calculate acquisition of signal (AOS) and loss of signal (LOS) times
 
         Args:
             sat_id: satnogs satellite identifier
@@ -98,19 +99,28 @@ class SpaceObjectTracker:
 
         if time is None:
             time = datetime.now(tz=timezone.utc)
-        t0 = self._timescale.from_datetime(time - timedelta(minutes=5))  # search results from now - 5 minutes
+        t0 = self._timescale.from_datetime(time)  # search results from now - 5 minutes
         t1 = self._timescale.from_datetime(time + delta_t)  # search up to +delta_t hours later
 
         satellite = await self._get_earth_satellite(sat_id=sat_id)
         times, events = satellite.find_events(self._sensor, t0=t0, t1=t1, altitude_degrees=self.min_el)
         times = [t.utc_datetime() for t in times]
         event_map = defaultdict(list)
-        key_remap = {0: "aos", 1: "tca", 2: "los"}
+        event_key_remap = {0: "aos", 1: "tca", 2: "los"}
         for t, event in zip(times, events):
-            event_map[key_remap[int(event)]].append(t)
-        return event_map
+            event_map[event_key_remap[int(event)]].append(t)
 
-    async def get_interpolated_orbit(self, sat_id: str, aos: datetime, los: datetime):
+        full_event_map = {key: {"time": None, "kinematic_state": None} for key in ["aos", "tca", "los"]}
+
+        for key in full_event_map.keys():
+            if event_map[key]:
+                time = event_map[key][0]  # Here we only take the first occurance
+                kinematic_state = await self.get_kinematic_state(sat_id, time=time)
+                full_event_map[key] = {"time": time, "kinematic_state": kinematic_state}
+
+        return full_event_map
+
+    async def get_interpolated_orbit(self, sat_id: str, aos: Optional[datetime] = None, los: Optional[datetime] = None):
         """Calculate orbital path within observational window (AOS-LOS)
 
         Args:
@@ -121,8 +131,15 @@ class SpaceObjectTracker:
         Returns:
             orbit: dict of lists of az, el, and times representing interpolated orbit
         """
+        # Compute AOS and LOS if not provided
+        if aos is None or los is None:
+            event_map = await self.get_aos_los(sat_id)
+            aos = event_map["aos"]["time"]
+            los = event_map["los"]["time"]
+
         num_samples = 20
         orbit = {"az": [], "el": [], "time": []}
+
         if (aos and los) and (aos < los):
             aos = self.local_to_utc(aos)
             los = self.local_to_utc(los)
