@@ -59,27 +59,28 @@ class TaskGenerator:
         aos_los = await self.astrodynamics.get_aos_los(sat_id)
         interpolated_orbit = await self.astrodynamics.get_interpolated_orbit(sat_id)
         downlink_freqs = await self.radiometrics.get_downlink_freqs(sat_id)
+        freq = downlink_freqs[0] if downlink_freqs else 433e6
+        task_id = str(uuid.uuid4())
 
         task = {
             "source": "hamilton",
             "timestamp": datetime.now().isoformat(),
-            "task_id": str(uuid.uuid4()),
+            "task_id": task_id,
             "task_type": "leo_track",
             "parameters": {
                 "sat_id": sat_id,
                 "aos": aos_los.get("aos", None),
                 "tca": aos_los.get("tca", None),
                 "los": aos_los.get("los", None),
-                "sdr": {"sat_id": sat_id, "freq": downlink_freqs[0]},
+                "sdr": {"sat_id": sat_id, "freq": freq},
                 "interpolated_orbit": interpolated_orbit,
             },
         }
-        print("test123")
 
         if self.validate_task(task):
             return task
         else:
-            logger.error(f"Generated task for {sat_id} is invalid.")
+            logger.error(f"Generated task id {task_id} for sat_id {sat_id} is invalid.")
             return None
 
     def validate_task(self, task: Task) -> bool:
@@ -96,4 +97,5 @@ class TaskGenerator:
         if aos_time and los_time and aos_time < los_time and los_time > current_time:
             return True
         else:
+            logger.error(f"Invalid task. aos_time: {aos_time}, los_time: {los_time}, current_time: {current_time}")
             return False
