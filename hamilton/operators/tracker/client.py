@@ -18,11 +18,11 @@ class TrackerTelemetryHandler(MessageHandler):
 
 
 class TrackerClient(AsyncMessageNodeOperator):
-    def __init__(self, config: TrackerClientConfig = None):
+    def __init__(self, config: TrackerClientConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = TrackerClientConfig()
         handlers = [TrackerTelemetryHandler()]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
         self.routing_key_base = "observatory.tracker.command"
 
     async def _publish_command(self, command: str, parameters: dict, rpc: bool = True, timeout: int = 10) -> dict:
@@ -74,30 +74,37 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    client = TrackerClient()
+    client = TrackerClient(shutdown_event=shutdown_event)
     task_generator = TaskGenerator()
 
     try:
         await client.start()
         await task_generator.start()
 
-        sat_id = "57203"
+        sat_id = "58339"
         task = await task_generator.generate_task(sat_id)
 
         response = await client.status()
-        print(response)
+        print(f"Status response: {response}")
 
         response = await client.slew_to_home()
-        print(response)
+        print(f"Slew to home response: {response}")
 
-        response = await client.slew_to_aos(task)
-        print(response)
+        if task is not None:
+            response = await client.slew_to_aos(task)
+            print(f"Slew to AOS response: {response}")
+
+            await client.track(task)
+            if input("Continue for 10 more seconds? y/n.") == "y":
+                await asyncio.sleep(10)
+        else:
+            print("Task is None")
 
         response = await client.status()
-        print(response)
+        print(f"Status response: {response}")
 
         response = await client.stop()
-        print(response)
+        print(f"Stop response: {response}")
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")

@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 class DBUpdater(AsyncMessageNodeOperator):
-    def __init__(self, config: DBUpdaterConfig = None):
+    def __init__(self, config: DBUpdaterConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = DBUpdaterConfig()
-        super().__init__(config=config)
+        super().__init__(config=config, shutdown_event=shutdown_event)
         je9pel = JE9PELGenerator(config)
         self.db_generator = SatcomDBGenerator(config, je9pel)
         self.config = config
@@ -88,7 +88,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = DBUpdater()
+    controller = DBUpdater(shutdown_event=shutdown_event)
 
     try:
         await controller.start()

@@ -17,11 +17,11 @@ class DBTelemetryHandler(MessageHandler):
 
 
 class DBClient(AsyncMessageNodeOperator):
-    def __init__(self, config=None):
+    def __init__(self, config=None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = DBClientConfig()
         handlers = [DBTelemetryHandler()]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
         self.routing_key_base = "observatory.database.command"
 
     async def _publish_command(self, command: str, parameters: dict) -> dict:
@@ -60,7 +60,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    client = DBClient()
+    client = DBClient(shutdown_event=shutdown_event)
 
     try:
         await client.start()

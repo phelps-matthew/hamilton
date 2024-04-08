@@ -32,17 +32,17 @@ class SchedulerCommandHandler(MessageHandler):
         if command == "add_target":
             telemetry_type = None
             if not self.scheduler.is_running:
-                await self.scheduler.add_target()
+                await self.scheduler.add_target(parameters)
 
         elif command == "remove_target":
             telemetry_type = None
             if not self.scheduler.is_running:
-                await self.scheduler.enqueue()
+                await self.scheduler.remove_target(parameters)
 
         elif command == "force_refresh":
             telemetry_type = None
             if not self.scheduler.is_running:
-                await self.scheduler.dequeue()
+                await self.scheduler.force_refresh()
 
         elif command == "stop":
             telemetry_type = None
@@ -59,12 +59,12 @@ class SchedulerCommandHandler(MessageHandler):
 
 
 class SchedulerController(AsyncMessageNodeOperator):
-    def __init__(self, config: SchedulerControllerConfig = None):
+    def __init__(self, config: SchedulerControllerConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = SchedulerControllerConfig()
         scheduler = Scheduler()
         handlers = [SchedulerCommandHandler(scheduler)]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
 
 
 shutdown_event = asyncio.Event()
@@ -81,7 +81,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = SchedulerController()
+    controller = SchedulerController(shutdown_event=shutdown_event)
 
     try:
         await controller.start()

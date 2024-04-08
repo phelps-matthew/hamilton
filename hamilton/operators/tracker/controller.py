@@ -31,21 +31,18 @@ class TrackerCommandHandler(MessageHandler):
         if command == "track":
             telemetry_type = None
             if not self.tracker.is_tracking:
-                await self.tracker.clear_shutdown_event()
                 await self.tracker.setup_task(parameters)
                 await self.tracker.track()
 
         elif command == "slew_to_home":
             telemetry_type = "status"
             if not self.tracker.is_tracking:
-                await self.tracker.clear_shutdown_event()
                 await self.tracker.slew_to_home()
                 response = {}
 
         elif command == "slew_to_aos":
             telemetry_type = "status"
             if not self.tracker.is_tracking:
-                await self.tracker.clear_shutdown_event()
                 await self.tracker.setup_task(parameters)
                 await self.tracker.slew_to_aos()
                 response = {}
@@ -65,12 +62,12 @@ class TrackerCommandHandler(MessageHandler):
 
 
 class TrackerController(AsyncMessageNodeOperator):
-    def __init__(self, config: TrackerControllerConfig = None):
+    def __init__(self, config: TrackerControllerConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = TrackerControllerConfig()
         tracker = Tracker(config)
         handlers = [TrackerCommandHandler(tracker)]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
 
 
 shutdown_event = asyncio.Event()
@@ -87,7 +84,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = TrackerController()
+    controller = TrackerController(shutdown_event=shutdown_event)
 
     try:
         await controller.start()

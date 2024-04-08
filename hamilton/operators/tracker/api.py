@@ -41,7 +41,7 @@ class Tracker:
         try:
             await self.mount.stop()
             await self.astrodynamics.stop()
-            logger.info("Tracker successfully stopped")
+            logger.info("Tracker api successfully stopped")
         except Exception as e:
             logger.error(f"Failed to stop tracker clients: {e}")
 
@@ -53,20 +53,24 @@ class Tracker:
         self.shutdown_event.set()
         await self.mount.stop_rotor()
         self.is_tracking = False
-        logger.info("Tracking routine has been successfully stopped.")
+        logger.info("Tracking successfully stopped.")
 
     async def setup_task(self, task: Task):
         """Idempotently initialize active task parameters"""
         self.task = task
-        az_rate_aos = task["parameters"]["aos"]["kinematic_state"]["az_rate"]
-        interpolated_orbit = task["parameters"]["interpolated_orbit"]
-        self.aos_rotor_angles = AOSPath.get_aos_rotor_angles(
-            az_rate_aos=az_rate_aos, interpolated_orbit=interpolated_orbit
-        )
-        self.sat_id = task["parameters"]["sat_id"]
+        if task is not None:
+            az_rate_aos = task["parameters"]["aos"]["kinematic_state"]["az_rate"]
+            interpolated_orbit = task["parameters"]["interpolated_orbit"]
+            self.aos_rotor_angles = AOSPath.get_aos_rotor_angles(
+                az_rate_aos=az_rate_aos, interpolated_orbit=interpolated_orbit
+            )
+            self.sat_id = task["parameters"]["sat_id"]
+        else:
+            logger.error("Task is None")
 
     async def slew_and_wait(self, az, el, angular_tolerance=0.25):
         """Rotate to a specific azimuth and elevation and wait until the position is reached."""
+        await self.clear_shutdown_event()
         az, el = self._safe_az_el(az, el)
         await self.mount.set(az, el)
         try:
@@ -90,6 +94,7 @@ class Tracker:
             logger.error(f"Unexpected error during slew: {e}")
         finally:
             await self.stop_tracking()
+            await asyncio.sleep(self.slew_interval)
 
     async def slew_to_home(self):
         az, el = self.config.az_home, self.config.el_home
@@ -101,13 +106,14 @@ class Tracker:
         az_aos, az_aos_half, el_aos = self.aos_rotor_angles
         logger.info("Slewing to *half* AOS")
         await self.slew_and_wait(az_aos_half, el_aos)
-        logger.info("Positioning rotator for AOS")
+        logger.info("Slewing to *final AOS")
         return await self.slew_and_wait(az_aos, el_aos)
 
     async def track(self):
-        """Track a space object until it reaches a minimum elevation or is manually stopped."""
+        """Track a space object until it reaches a minimum elevation or is manually stopped.""" 
+        await self.clear_shutdown_event()
         try:
-            logger.info("Starting tracking")
+            logger.info("Starting tracking routine")
             self.is_tracking = True
             while not self.shutdown_event.is_set():
                 kinematic_state = await self.astrodynamics.get_kinematic_state(self.sat_id)
@@ -119,7 +125,7 @@ class Tracker:
                 await self.mount.set(az, el)
                 await asyncio.sleep(self.slew_interval)
             self.is_tracking = False
-            logger.info("Tracking completed.")
+            logger.info("Tracking routine completed.")
         except Exception as e:
             logger.error(f"Unexpected error during tracking: {e}")
         finally:
@@ -139,7 +145,7 @@ class Tracker:
             safe_el = 180 - self.min_elevation
         else:
             safe_el = el
-        return safe_az, safe_el
+        return round(safe_az, 2), round(safe_el, 2)
 
     async def clear_shutdown_event(self):
         self.shutdown_event.clear()

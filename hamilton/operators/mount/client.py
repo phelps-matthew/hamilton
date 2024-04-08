@@ -17,11 +17,11 @@ class MountTelemetryHandler(MessageHandler):
 
 
 class MountClient(AsyncMessageNodeOperator):
-    def __init__(self, config: MountClientConfig = None):
+    def __init__(self, config: MountClientConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = MountClientConfig()
         handlers = [MountTelemetryHandler()]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
         self.routing_key_base = "observatory.mount.command"
 
     async def _publish_command(self, command: str, parameters: dict, rpc: bool = True) -> dict:
@@ -63,7 +63,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    client = MountClient()
+    client = MountClient(shutdown_event=shutdown_event)
 
     try:
         await client.start()

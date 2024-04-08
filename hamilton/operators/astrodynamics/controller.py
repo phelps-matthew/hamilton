@@ -59,13 +59,13 @@ class AstrodynamicsCommandHandler(MessageHandler):
 
 
 class AstrodynamicsController(AsyncMessageNodeOperator):
-    def __init__(self, config: AstrodynamicsControllerConfig = None):
+    def __init__(self, config: AstrodynamicsControllerConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = AstrodynamicsControllerConfig()
         self.db = DBClient()
         so_tracker = SpaceObjectTracker(config=config, database=self.db)
         handlers = [AstrodynamicsCommandHandler(so_tracker, self.db)]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
 
 
 shutdown_event = asyncio.Event()
@@ -82,7 +82,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = AstrodynamicsController()
+    controller = AstrodynamicsController(shutdown_event=shutdown_event)
 
     try:
         await controller.start()

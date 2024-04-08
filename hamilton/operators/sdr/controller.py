@@ -52,13 +52,13 @@ class SDRCommandHandler(MessageHandler):
 
 
 class SDRController(AsyncMessageNodeOperator):
-    def __init__(self, config: SDRControllerConfig = None):
+    def __init__(self, config: SDRControllerConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = SDRControllerConfig()
         relay = RelayClient()
         recorder = SDRSigMFRecord(config=config, relay_client=relay)
         handlers = [SDRCommandHandler(recorder, relay)]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
 
 
 shutdown_event = asyncio.Event()
@@ -75,7 +75,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = SDRController()
+    controller = SDRController(shutdown_event=shutdown_event)
 
     try:
         await controller.start()

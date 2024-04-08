@@ -17,11 +17,11 @@ class ServiceViewerTelemetryHandler(MessageHandler):
 
 
 class ServiceViewerClient(AsyncMessageNodeOperator):
-    def __init__(self, config: ServiceViewerClientConfig = None):
+    def __init__(self, config: ServiceViewerClientConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = ServiceViewerClientConfig()
         handlers = [ServiceViewerTelemetryHandler()]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
         self.routing_key_base = "observatory.service_viewer.command"
 
     async def _publish_command(self, command: str, parameters: dict, rpc: bool = True) -> dict:
@@ -53,7 +53,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    client = ServiceViewerClient()
+    client = ServiceViewerClient(shutdown_event=shutdown_event)
 
     try:
         await client.start()

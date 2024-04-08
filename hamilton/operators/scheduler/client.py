@@ -22,11 +22,11 @@ class OrchestratorTelemetryHandler(MessageHandler):
 
 
 class SchedulerClient(AsyncMessageNodeOperator):
-    def __init__(self, config: SchedulerClientConfig = None):
+    def __init__(self, config: SchedulerClientConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = SchedulerClientConfig()
         handlers = [OrchestratorTelemetryHandler()]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
         self.routing_key_base = "observatory.scheduler.command"
 
     async def _publish_command(self, command: str, parameters: dict, rpc: bool = True) -> dict:
@@ -78,7 +78,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    client = SchedulerClient()
+    client = SchedulerClient(shutdown_event=shutdown_event)
 
     try:
         await client.start()

@@ -18,11 +18,11 @@ class OrchestratorTelemetryHandler(MessageHandler):
 
 
 class OrchestratorClient(AsyncMessageNodeOperator):
-    def __init__(self, config: OrchestratorClientConfig = None):
+    def __init__(self, config: OrchestratorClientConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = OrchestratorClientConfig()
         handlers = [OrchestratorTelemetryHandler()]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
         self.routing_key_base = "observatory.orchestrator.command"
 
     async def _publish_command(self, command: str, parameters: dict, rpc: bool = True) -> dict:
@@ -64,7 +64,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    client = OrchestratorClient()
+    client = OrchestratorClient(shutdown_event=shutdown_event)
 
     try:
         await client.start()

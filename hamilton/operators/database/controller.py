@@ -66,11 +66,11 @@ class DBControllerCommandHandler(MessageHandler):
 
 
 class DBController(AsyncMessageNodeOperator):
-    def __init__(self, config: DBControllerConfig = None):
+    def __init__(self, config: DBControllerConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = DBControllerConfig()
         handlers = [DBControllerCommandHandler(config)]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
 
 
 shutdown_event = asyncio.Event()
@@ -87,7 +87,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = DBController()
+    controller = DBController(shutdown_event=shutdown_event)
 
     try:
         await controller.start()

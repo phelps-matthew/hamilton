@@ -51,12 +51,12 @@ class OrchestratorCommandHandler(MessageHandler):
 
 
 class OrchestratorController(AsyncMessageNodeOperator):
-    def __init__(self, config: OrchestatorControllerConfig = None):
+    def __init__(self, config: OrchestatorControllerConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = OrchestatorControllerConfig()
         orchestrator = Orchestrator()
         handlers = [OrchestratorCommandHandler(orchestrator)]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
 
 
 shutdown_event = asyncio.Event()
@@ -73,7 +73,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = OrchestratorController()
+    controller = OrchestratorController(shutdown_event=shutdown_event)
 
     try:
         await controller.start()

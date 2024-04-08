@@ -3,7 +3,7 @@ import logging
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional
-from hamilton.base.task import Task, TaskType
+from hamilton.base.task import Task, TaskGenerator
 from hamilton.operators.radiometrics.client import RadiometricsClient
 from hamilton.operators.astrodynamics.client import AstrodynamicsClient
 from hamilton.operators.orchestrator.client import OrchestratorClient
@@ -12,11 +12,13 @@ logger = logging.getLogger(__name__)
 
 
 class Scheduler:
-    def __init__(self, orchestrator):
-        self.radiometrics: RadiometricsClient = None
-        self.astrodynamics: AstrodynamicsClient = None
-        self.orchestrator: OrchestratorClient = orchestrator
-        self.client_list = [self.radiometrics, self.astrodynamics, self.orchestrator]
+    def __init__(self):
+        try:
+            self.task_generator: TaskGenerator = TaskGenerator()
+            self.orchestrator: OrchestratorClient = OrchestratorClient()
+        except Exception as e:
+            logger.error(f"An error occurred while initializing Scheduler: {e}")
+        self.client_list = [self.task_generator, self.orchestrator]
         self.targets: list[str] = []
         self.task_queue: list[Task] = []
         self.queue_non_empty_event = asyncio.Event()
@@ -214,3 +216,4 @@ class Scheduler:
             return True
         else:
             return False
+

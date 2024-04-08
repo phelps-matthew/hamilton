@@ -66,11 +66,11 @@ class LogHandler(MessageHandler):
         await self.write_message(message_out, source_type_log_path)
 
 class LogCollector(AsyncMessageNodeOperator):
-    def __init__(self, config: LogCollectorConfig = None):
+    def __init__(self, config: LogCollectorConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = LogCollectorConfig()
         handlers = [LogHandler(config)]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
 
 shutdown_event = asyncio.Event()
 
@@ -84,7 +84,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = LogCollector()
+    controller = LogCollector(shutdown_event=shutdown_event)
 
     try:
         await controller.start()

@@ -46,13 +46,13 @@ class RadiometricsCommandHandler(MessageHandler):
 
 
 class RadiometricsController(AsyncMessageNodeOperator):
-    def __init__(self, config: RadiometricsControllerConfig = None):
+    def __init__(self, config: RadiometricsControllerConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = RadiometricsControllerConfig()
         self.db = DBClient()
         radiometrics = Radiometrics(config=config, database=self.db)
         handlers = [RadiometricsCommandHandler(radiometrics, self.db)]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
 
 
 shutdown_event = asyncio.Event()

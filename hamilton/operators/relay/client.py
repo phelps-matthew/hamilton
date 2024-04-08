@@ -17,11 +17,11 @@ class RelayTelemetryHandler(MessageHandler):
 
 
 class RelayClient(AsyncMessageNodeOperator):
-    def __init__(self, config: RelayClientConfig = None):
+    def __init__(self, config: RelayClientConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = RelayClientConfig()
         handlers = [RelayTelemetryHandler()]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
         self.routing_key_base = "observatory.relay.command"
 
     async def _publish_command(self, command: str, parameters: dict, rpc: bool = True) -> dict:
@@ -60,7 +60,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    client = RelayClient()
+    client = RelayClient(shutdown_event=shutdown_event)
 
     try:
         await client.start()

@@ -59,13 +59,13 @@ class ServiceViewerCommandHandler(MessageHandler):
 
 
 class ServiceViewerController(AsyncMessageNodeOperator):
-    def __init__(self, config: ServiceViewerControllerConfig = None):
+    def __init__(self, config: ServiceViewerControllerConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = ServiceViewerControllerConfig()
         self.config = config
         self.services = config.SERVICES
         self.handler = ServiceViewerCommandHandler(services=self.services)
-        super().__init__(config, [self.handler])
+        super().__init__(config, [self.handler], shutdown_event)
 
     async def publish_service_status_telemetry(self):
         routing_key = f"{self.handler.routing_key_base}.status"
@@ -105,7 +105,7 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    controller = ServiceViewerController()
+    controller = ServiceViewerController(shutdown_event=shutdown_event)
 
     try:
         await controller.start()

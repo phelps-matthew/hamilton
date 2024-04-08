@@ -22,17 +22,17 @@ class RadiometricsClient(AsyncMessageNodeOperator):
     def __init__(
         self,
         config: RadiometricsClientConfig = None,
+        shutdown_event: asyncio.Event = None
     ):
         if config is None:
             config = RadiometricsClientConfig()
         handlers = [RadiometricsTelemetryHandler()]
-        super().__init__(config, handlers)
+        super().__init__(config, handlers, shutdown_event)
         self.routing_key_base = "observatory.radiometrics.command"
 
     async def _publish_command(self, command: str, parameters: dict, rpc: bool = True) -> dict:
         routing_key = f"{self.routing_key_base}.{command}"
         message = self.msg_generator.generate_command(command, parameters)
-        print(routing_key, message)
         if rpc:
             response = await self.publish_rpc_message(routing_key, message)
         else:
@@ -64,13 +64,14 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    client = RadiometricsClient()
+    client = RadiometricsClient(shutdown_event=shutdown_event)
 
     try:
         await client.start()
 
         # Sample ids with 2x freqs, 1x freqs, 0x freqs
-        sat_ids = ["25397", "39433", "57186"]
+        #sat_ids = ["25397", "39433", "57186"]
+        sat_ids = ["43156"]
 
         for sat_id in sat_ids:
             response = await client.get_tx_profile(sat_id)
