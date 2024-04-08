@@ -13,13 +13,15 @@ from hamilton.messaging.rpc_manager import RPCManager
 
 logger = logging.getLogger(__name__)
 
+
 class AsyncProducer:
-    def __init__(self, config: MessageNodeConfig, rpc_manager: RPCManager):
+    def __init__(self, config: MessageNodeConfig, rpc_manager: RPCManager, shutdown_event: asyncio.Event):
         self.config: MessageNodeConfig = config
         self.publish_hashmap: dict[str, Publishing] = self._build_publish_hashmap()
         self.connection: aio_pika.Connection = None
         self.channel: aio_pika.Channel = None
         self.rpc_manager: RPCManager = rpc_manager
+        self.shutdown_event: asyncio.Event = shutdown_event
 
     def _build_publish_hashmap(self) -> dict:
         """Builds a hashmap of routing keys to Publishing objects for quick lookup."""
@@ -88,10 +90,28 @@ class AsyncProducer:
         logger.info(f"Message published to exchange with routing key: {routing_key}")
 
         try:
-            # Wait for the response or timeout
-            response = await asyncio.wait_for(future, timeout)
-            logger.info("Response received successfully.")
-            return response
+            # If shutdown event is passed in, monitor its state to abort RPC calls
+            if self.shutdown_event is not None:
+                # Convert the coroutine to a task
+                shutdown_wait_task = asyncio.create_task(self.shutdown_event.wait())
+
+                # Now pass the task instead of the coroutine
+                done, pending = await asyncio.wait(
+                    [future, shutdown_wait_task], timeout=timeout, return_when=asyncio.FIRST_COMPLETED
+                )
+
+                if future in done:
+                    response = future.result()
+                    logger.info("Response received successfully.")
+                    return response
+                elif self.shutdown_event.is_set():
+                    logger.info("Shutdown event detected. Cancelling RPC call.")
+                    return None
+            # Else wait for the response or timeout
+            else:
+                response = await asyncio.wait_for(future, timeout)
+                logger.info("Response received successfully.")
+                return response
         except asyncio.TimeoutError:
             logger.error(f"RPC call timed out after {timeout} seconds.")
             return None

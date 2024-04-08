@@ -16,6 +16,8 @@ class AsyncMessageNodeOperator:
         The configuration for the message node.
     handlers : list[MessageHandler]
         The list of message handlers.
+    shutdown_event : asyncio.Event
+        The shutdown event for the message node, particularly for escaping RPC timeouts.
 
     Methods
     -------
@@ -29,8 +31,10 @@ class AsyncMessageNodeOperator:
         Publish a RPC message to the message node asynchronously and wait for the response.
     """
 
-    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler] = []):
-        self.node = AsyncMessageNode(config, handlers)
+    def __init__(
+        self, config: MessageNodeConfig, handlers: list[MessageHandler] = [], shutdown_event: asyncio.Event = None
+    ):
+        self.node = AsyncMessageNode(config, handlers, shutdown_event)
         self.config = config
 
     async def start(self) -> None:

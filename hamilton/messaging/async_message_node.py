@@ -24,14 +24,15 @@ logger = logging.getLogger(__name__)
 
 
 class AsyncMessageNode(IMessageNodeOperations):
-    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler]):
+    def __init__(self, config: MessageNodeConfig, handlers: list[MessageHandler], shutdown_event: asyncio.Event):
         self.config: MessageNodeConfig = config
         self.rpc_manager: RPCManager = RPCManager()
         self.consumer: AsyncConsumer = AsyncConsumer(config, self.rpc_manager, handlers)
-        self.producer: AsyncProducer = AsyncProducer(config, self.rpc_manager)
+        self.producer: AsyncProducer = AsyncProducer(config, self.rpc_manager, shutdown_event)
         self._msg_generator: MessageGenerator = MessageGenerator(config.name, config.message_version)
         self.startup_hooks: list[Callable[[], None]] = []
         self.shutdown_hooks: list[Callable[[], None]] = []
+        self.shutdown_event: asyncio.Event = shutdown_event
 
         # Link MessageNode to handlers' node operations interface and register external shutdown hooks
         for handler in handlers:
