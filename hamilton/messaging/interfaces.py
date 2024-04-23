@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional
 from hamilton.base.messages import Message, MessageGenerator, MessageHandlerType
+from hamilton.base.config import Config
 
 
 # Surfaces what methods are available to classes that interface with MessageNode instances

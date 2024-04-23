@@ -95,12 +95,13 @@ class SpaceObjectTracker:
             * los — Satellite fell below ``altitude_degrees``.
         """
         # offset from `time` by which to compute next AOS and LOS
-        delta_t = timedelta(hours=delta_t)
+        delta_t_prior = timedelta(minutes=5)
+        delta_t_after = timedelta(hours=delta_t)
 
         if time is None:
             time = datetime.now(tz=timezone.utc)
-        t0 = self._timescale.from_datetime(time)  # search results from now - 5 minutes
-        t1 = self._timescale.from_datetime(time + delta_t)  # search up to +delta_t hours later
+        t0 = self._timescale.from_datetime(time - delta_t_prior)  # search results from now - 5 minutes
+        t1 = self._timescale.from_datetime(time + delta_t_after)  # search up to +delta_t hours later
 
         satellite = await self._get_earth_satellite(sat_id=sat_id)
         times, events = satellite.find_events(self._sensor, t0=t0, t1=t1, altitude_degrees=self.min_el)
@@ -143,8 +144,8 @@ class SpaceObjectTracker:
         orbit = {"az": [], "el": [], "time": []}
 
         if (aos and los) and (aos < los):
-            aos = self.local_to_utc(aos)
-            los = self.local_to_utc(los)
+            #aos = self.local_to_utc(aos)
+            #los = self.local_to_utc(los)
             delta = los - aos
             interval = delta / (num_samples - 1)
             for i in range(num_samples):
@@ -152,7 +153,8 @@ class SpaceObjectTracker:
                 obs_params = await self.get_kinematic_state(sat_id, t)
                 orbit["az"].append(obs_params["az"])
                 orbit["el"].append(obs_params["el"])
-                orbit["time"].append(self.utc_to_local(t).strftime("%m-%d %H:%M:%S"))
+                #orbit["time"].append(self.utc_to_local(t).strftime("%m-%d %H:%M:%S"))
+                orbit["time"].append(t.strftime("%m-%d %H:%M:%S"))
         return orbit
 
     async def precompute_orbit(self, sat_id: str) -> None:
