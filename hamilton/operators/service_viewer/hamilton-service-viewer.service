@@ -1,7 +1,7 @@
 [Unit]
 Description=Systemd Status Publisher Service
 Requires=rabbitmq-server.service
-After=network.target rabbitmq-server.service hamilton-log-collector.service 
+After=rabbitmq-server.service hamilton-log-collector.service 
 
 [Service]
 User=mgp

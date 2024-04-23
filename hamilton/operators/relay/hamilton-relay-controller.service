@@ -1,8 +1,9 @@
 [Unit]
 Description=Relay Controller Service
 Requires=rabbitmq-server.service
-After=network.target rabbitmq-server.service hamilton-log-collector.service 
-
+After=rabbitmq-server.service hamilton-log-collector.service 
+# Defines the time period in which restart attempts are counted (seconds)
+StartLimitIntervalSec=60
 [Service]
 User=mgp
 ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/operators/relay/controller.py
@@ -11,6 +12,12 @@ WorkingDirectory=/home/mgp/dev/hamilton/hamilton/operators/relay/
 # Not sure these are needed..
 #StandardOutput=journal
 #StandardError=inherit
+# Specifies the number of restart attempts within the interval defined above
+StartLimitBurst=1
+# Optional: Time to wait before restarting the service
+RestartSec=5
+
+
 
 [Install]
 WantedBy=multi-user.target
