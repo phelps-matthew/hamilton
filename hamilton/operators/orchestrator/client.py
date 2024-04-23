@@ -1,12 +1,15 @@
 import asyncio
+import json
 import signal
 from typing import Optional
 
 from hamilton.base.messages import MessageHandlerType, Message
+from hamilton.base.task import TaskGenerator
 from hamilton.operators.orchestrator.config import OrchestratorClientConfig
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.messaging.interfaces import MessageHandler
 from hamilton.base.task import Task
+from hamilton.common.utils import CustomJSONEncoder
 
 
 class OrchestratorTelemetryHandler(MessageHandler):
@@ -39,8 +42,8 @@ class OrchestratorClient(AsyncMessageNodeOperator):
         parameters = task
         return await self._publish_command(command, parameters, rpc=False)
 
-    async def stop(self):
-        command = "stop"
+    async def stop_orchestrating(self):
+        command = "stop_orchestrating"
         parameters = {}
         return await self._publish_command(command, parameters, rpc=False)
 
@@ -65,14 +68,31 @@ async def main():
 
     # Application setup
     client = OrchestratorClient(shutdown_event=shutdown_event)
+    task_generator = TaskGenerator()
 
     try:
         await client.start()
+        await task_generator.start()
+
+        sat_id = "99930"
+        task = await task_generator.generate_task(sat_id)
+        print(json.dumps(task, cls=CustomJSONEncoder, indent=4))
 
         response = await client.status()
         print(response)
 
-        response = await client.stop()
+        if task is not None:
+            response = await client.orchestrate(task)
+            print(f"Orchestrate response: {response}")
+
+            if input("Stop orchestrating? y/n:") == "y":
+                await client.stop_orchestrating()
+            else:
+                await asyncio.sleep(120)
+        else:
+            print("Task is None")
+
+        response = await client.stop_orchestrating()
         print(response)
 
     except Exception as e:
@@ -84,4 +104,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

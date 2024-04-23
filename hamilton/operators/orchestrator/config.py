@@ -31,7 +31,7 @@ class OrchestratorClientConfig(MessageNodeConfig):
             rpc=True,
             routing_keys=[
                 "observatory.orchestrator.command.orchestrate",
-                "observatory.orchestrator.command.stop",
+                "observatory.orchestrator.command.stop_orchestrating",
                 "observatory.orchestrator.command.status",
             ],
         ),

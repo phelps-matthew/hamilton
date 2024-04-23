@@ -7,10 +7,9 @@
 6) Stop recording. Position mount to home. (Post position) Signal non-active.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import asyncio
 import logging
-from hamilton.operators.astrodynamics.client import AstrodynamicsClient
 from hamilton.operators.sdr.client import SDRClient
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.operators.tracker.client import TrackerClient
@@ -34,7 +33,6 @@ class Orchestrator:
 
     async def start(self):
         logger.info("Starting Orchestrator.")
-        self.is_running = True
         for client in self.client_list:
             try:
                 await client.start()
@@ -46,7 +44,7 @@ class Orchestrator:
         await self.stop_orchestrating()
         for client in self.client_list:
             try:
-                await client.stop()
+                await client.stop_orchestrating()
             except Exception as e:
                 logger.error(f"An error occured while stopping {client}: {e}")
 
@@ -66,6 +64,7 @@ class Orchestrator:
         """Orchestrate the tracking and recording of a space object."""
         logger.info("Starting orchestration...")
         self.is_running = True
+        await self.clear_shutdown_event()
 
         try:
             # Slew to AOS ready position
@@ -76,12 +75,15 @@ class Orchestrator:
             aos_time = self.task["parameters"]["aos"]["time"]
             los_time = self.task["parameters"]["los"]["time"]
             aos_pre_sleep = aos_time - datetime.now(timezone.utc)
-            aos_los_sleep = los_time - aos_time
+            #aos_los_sleep = los_time - aos_time
+            aos_los_sleep = timedelta(seconds=20)
 
             # Sleep until AOS
             logger.info(f"Waiting for AOS. Sleeping for {aos_pre_sleep.total_seconds()} seconds.")
+            aos_pre_sleep_task = asyncio.create_task(asyncio.sleep(aos_pre_sleep.total_seconds()))
+            shutdown_task = asyncio.create_task(self.shutdown_event.wait())
             await asyncio.wait(
-                [asyncio.sleep(aos_pre_sleep.total_seconds()), self.shutdown_event.wait()],
+                [aos_pre_sleep_task, shutdown_task],
                 return_when=asyncio.FIRST_COMPLETED,
             )
             if self.shutdown_event.is_set():
@@ -91,25 +93,27 @@ class Orchestrator:
 
             # Start operators
             logger.info("Starting tracking and recording.")
-            await self.tracker.track(self.task)
-            await self.sdr.start_recording()
+            await self.tracker.start_tracking(self.task)
+            await self.sdr.start_record(self.task["parameters"]["sdr"])
 
             # Sleep until LOS
             logger.info(f"Tracking and recording. Sleeping until LOS for {aos_los_sleep.total_seconds()} seconds.")
+            aos_los_sleep_task = asyncio.create_task(asyncio.sleep(aos_los_sleep.total_seconds()))
+            shutdown_task = asyncio.create_task(self.shutdown_event.wait())
             await asyncio.wait(
-                [asyncio.sleep(aos_los_sleep.total_seconds()), self.shutdown_event.wait()],
+                [aos_los_sleep_task, shutdown_task],
                 return_when=asyncio.FIRST_COMPLETED,
             )
             if self.shutdown_event.is_set():
                 logger.info("Shutdown event triggered. Stopping tracking and recording.")
                 await self.tracker.stop_tracking()
-                await self.sdr.stop_recording()
+                await self.sdr.stop_record()
                 await self.stop_orchestrating()
                 return
 
             # Stop operators
             logger.info("Stopping tracking and recording.")
-            await self.sdr.stop_recording()
+            await self.sdr.stop_record()
             await self.tracker.stop_tracking()
 
             # Finished
@@ -118,11 +122,9 @@ class Orchestrator:
 
         except Exception as e:
             logger.error(f"An error occurred during orchestration: {e}")
-            await self.sdr.stop_recording()
+            await self.sdr.stop_record()
             await self.tracker.stop_tracking()
             await self.stop_orchestrating()
 
     async def clear_shutdown_event(self):
         self.shutdown_event.clear()
-
-

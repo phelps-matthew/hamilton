@@ -1,4 +1,3 @@
-
 import asyncio
 import signal
 from typing import Optional
@@ -7,12 +6,15 @@ from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOpera
 from hamilton.messaging.interfaces import MessageHandler
 from hamilton.operators.orchestrator.api import Orchestrator
 from hamilton.operators.orchestrator.config import OrchestatorControllerConfig
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class OrchestratorCommandHandler(MessageHandler):
-    def __init__(self, orchestrator: Orchestrator):
+    def __init__(self, config: OrchestatorControllerConfig, orchestrator: Orchestrator):
         super().__init__(message_type=MessageHandlerType.COMMAND)
-        self.config = self.node_operations.config
+        self.config = config
         self.orchestrator: Orchestrator = orchestrator
         self.startup_hooks = [self._start_orchestrator]
         self.shutdown_hooks = [self._stop_orchestrator]
@@ -32,11 +34,12 @@ class OrchestratorCommandHandler(MessageHandler):
         if command == "orchestrate":
             telemetry_type = None
             if not self.orchestrator.is_running:
-                await self.orchestrator.clear_shutdown_event()
                 await self.orchestrator.set_task(parameters)
                 await self.orchestrator.orchestrate()
+            else:
+                logger.warning("Orchestrator is already running")
 
-        elif command == "stop":
+        elif command == "stop_orchestrating":
             telemetry_type = None
             await self.orchestrator.stop_orchestrating()
 
@@ -55,7 +58,7 @@ class OrchestratorController(AsyncMessageNodeOperator):
         if config is None:
             config = OrchestatorControllerConfig()
         orchestrator = Orchestrator()
-        handlers = [OrchestratorCommandHandler(orchestrator)]
+        handlers = [OrchestratorCommandHandler(config, orchestrator)]
         super().__init__(config, handlers, shutdown_event)
 
 
