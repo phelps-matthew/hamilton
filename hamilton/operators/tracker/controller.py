@@ -7,6 +7,9 @@ from hamilton.operators.tracker.api import Tracker
 from hamilton.operators.tracker.config import TrackerControllerConfig
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.messaging.interfaces import MessageHandler
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class TrackerCommandHandler(MessageHandler):
@@ -28,11 +31,13 @@ class TrackerCommandHandler(MessageHandler):
         command = message["payload"]["commandType"]
         parameters = message["payload"]["parameters"]
 
-        if command == "track":
+        if command == "start_tracking":
             telemetry_type = None
             if not self.tracker.is_tracking:
                 await self.tracker.setup_task(parameters)
                 await self.tracker.track()
+            else:
+                logger.warning("Tracker is already tracking.")
 
         elif command == "slew_to_home":
             telemetry_type = "status"
@@ -47,7 +52,7 @@ class TrackerCommandHandler(MessageHandler):
                 await self.tracker.slew_to_aos()
                 response = {}
 
-        elif command == "stop":
+        elif command == "stop_tracking":
             telemetry_type = None
             await self.tracker.stop_tracking()
 

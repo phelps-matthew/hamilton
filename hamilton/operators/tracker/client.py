@@ -34,23 +34,23 @@ class TrackerClient(AsyncMessageNodeOperator):
             response = await self.publish_message(routing_key, message)
         return response
 
-    async def track(self, task: Task):
-        command = "track"
+    async def start_tracking(self, task: Task):
+        command = "start_tracking"
         parameters = task
         return await self._publish_command(command, parameters, rpc=False)
 
     async def slew_to_aos(self, task: Task):
         command = "slew_to_aos"
         parameters = task
-        return await self._publish_command(command, parameters, rpc=True, timeout=60)
+        return await self._publish_command(command, parameters, rpc=True, timeout=120)
 
     async def slew_to_home(self):
         command = "slew_to_home"
         parameters = {}
-        return await self._publish_command(command, parameters, rpc=True, timeout=60)
+        return await self._publish_command(command, parameters, rpc=True, timeout=120)
 
-    async def stop(self):
-        command = "stop"
+    async def stop_tracking(self):
+        command = "stop_tracking"
         parameters = {}
         return await self._publish_command(command, parameters, rpc=False)
 
@@ -81,7 +81,7 @@ async def main():
         await client.start()
         await task_generator.start()
 
-        sat_id = "58339"
+        sat_id = "99719"
         task = await task_generator.generate_task(sat_id)
 
         response = await client.status()
@@ -94,16 +94,20 @@ async def main():
             response = await client.slew_to_aos(task)
             print(f"Slew to AOS response: {response}")
 
-            await client.track(task)
-            if input("Continue for 10 more seconds? y/n.") == "y":
-                await asyncio.sleep(10)
+            print("starting tracking")
+            await client.start_tracking(task)
+
+            if input("Stop tracking? y/n:") == "y":
+                await client.stop_tracking()
+            else:
+                await asyncio.sleep(60)
         else:
             print("Task is None")
 
         response = await client.status()
         print(f"Status response: {response}")
 
-        response = await client.stop()
+        response = await client.stop_tracking()
         print(f"Stop response: {response}")
 
     except Exception as e:

@@ -29,9 +29,9 @@ class TrackerClientConfig(MessageNodeConfig):
             exchange="tracker",
             rpc=True,
             routing_keys=[
-                "observatory.tracker.command.track",
+                "observatory.tracker.command.start_tracking",
                 "observatory.tracker.command.status",
-                "observatory.tracker.command.stop",
+                "observatory.tracker.command.stop_tracking",
                 "observatory.tracker.command.slew_to_home",
                 "observatory.tracker.command.slew_to_aos",
             ],
