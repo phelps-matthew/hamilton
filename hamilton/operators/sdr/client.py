@@ -75,7 +75,7 @@ async def main():
         response = await client.start_record(parameters)
         print(response)
 
-        time.sleep(20)
+        time.sleep(10)
         #print(await client.status())
         #time.sleep(5)
 
