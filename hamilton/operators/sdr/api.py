@@ -10,6 +10,7 @@ from hamilton.operators.sdr.flowgraphs.record_sigmf import SigMFRecordFlowgraph
 from hamilton.operators.relay.client import RelayClient
 from pathlib import Path
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,16 @@ class SDRSigMFRecord:
         current_time = datetime.utcnow()
         formatted_time = current_time.strftime("%Y%m%d_%H%M%S")
         self.filename = str(self.obs_dir) + f"/{self.sat_id}_{self.band}_{formatted_time}"
+
+    def overwrite_sample_rate(self):
+        if self.filename is not None:
+            meta_path = Path(self.filename).with_suffix(".sigmf-meta")
+            with open(meta_path, 'r') as f:
+                metadata = json.load(f)
+            metadata["global"]["core:sample_rate"] = self.sample_rate
+            with open(meta_path, 'w') as f:
+                logger.info(f"Overwriting sample rate in {str(meta_path)}")
+                json.dump(metadata, f, indent=4)
 
     async def set_lna(self, state: Literal["on", "off"] = "off"):
         """Switch appropriate power relay based on value of `self.freq` and `state`"""
@@ -108,6 +119,7 @@ class SDRSigMFRecord:
             if self.flowgraph is not None:
                 self.flowgraph.stop()
                 self.flowgraph.wait()  # Waits for all processing to stop
+                self.overwrite_sample_rate() # sigmf has issue logging correct sample rate
             self.is_recording = False
             logger.info("Flowgraph stopped")
             await self.set_lna("off")
