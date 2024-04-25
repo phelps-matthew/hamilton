@@ -13,7 +13,11 @@ class MountCommandHandler(MessageHandler):
     def __init__(self, mount_driver: ROT2Prog):
         super().__init__(message_type=MessageHandlerType.COMMAND)
         self.mount: ROT2Prog = mount_driver
+        self.shutdown_hooks = [self.stop_rotor]
         self.routing_key_base = "observatory.mount.telemetry"
+
+    async def stop_rotor(self):
+        self.mount.stop()
 
     async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> None:
         response = None

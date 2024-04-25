@@ -52,12 +52,12 @@ class TrackerClient(AsyncMessageNodeOperator):
     async def stop_tracking(self):
         command = "stop_tracking"
         parameters = {}
-        return await self._publish_command(command, parameters, rpc=False)
+        return await self._publish_command(command, parameters, rpc=True)
 
     async def status(self):
         command = "status"
         parameters = {}
-        return await self._publish_command(command, parameters)
+        return await self._publish_command(command, parameters, rpc=True)
 
 
 shutdown_event = asyncio.Event()
@@ -81,7 +81,7 @@ async def main():
         await client.start()
         await task_generator.start()
 
-        sat_id = "99719"
+        sat_id = "98932"
         task = await task_generator.generate_task(sat_id)
 
         response = await client.status()
@@ -96,11 +96,24 @@ async def main():
 
             print("starting tracking")
             await client.start_tracking(task)
+            response = await client.status()
+            print(f"Status while tracking response: {response}")
 
-            if input("Stop tracking? y/n:") == "y":
-                await client.stop_tracking()
-            else:
-                await asyncio.sleep(60)
+            await asyncio.sleep(5)
+            await client.stop_tracking()
+            response = await client.status()
+            print(f"After stop tracking response: {response}")
+            await asyncio.sleep(1)
+            response = await client.status()
+            print(f"After stop tracking response 2: {response}")
+
+            response = await client.slew_to_home()
+            print(f"Slew to home response: {response}")
+
+            #if input("Stop tracking? y/n:") == "y":
+            #    await client.stop_tracking()
+            #else:
+            #    await asyncio.sleep(60)
         else:
             print("Task is None")
 

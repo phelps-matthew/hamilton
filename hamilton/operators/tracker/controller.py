@@ -33,28 +33,24 @@ class TrackerCommandHandler(MessageHandler):
 
         if command == "start_tracking":
             telemetry_type = None
-            if not self.tracker.is_tracking:
-                await self.tracker.setup_task(parameters)
-                await self.tracker.track()
-            else:
-                logger.warning("Tracker is already tracking.")
+            await self.tracker.setup_task(parameters)
+            await self.tracker.track()
 
         elif command == "slew_to_home":
             telemetry_type = "status"
-            if not self.tracker.is_tracking:
-                await self.tracker.slew_to_home()
-                response = {}
+            await self.tracker.slew_to_home()
+            response = {}
 
         elif command == "slew_to_aos":
             telemetry_type = "status"
-            if not self.tracker.is_tracking:
-                await self.tracker.setup_task(parameters)
-                await self.tracker.slew_to_aos()
-                response = {}
+            await self.tracker.setup_task(parameters)
+            await self.tracker.slew_to_aos()
+            response = {}
 
         elif command == "stop_tracking":
-            telemetry_type = None
+            telemetry_type = "status"
             await self.tracker.stop_tracking()
+            response = {}
 
         elif command == "status":
             telemetry_type = "status"

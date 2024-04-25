@@ -14,7 +14,7 @@ class Tracker:
         self.shutdown_event = asyncio.Event()
         self.min_elevation = self.config.el_min
         self.slew_interval = self.config.slew_interval
-        self.is_tracking = False
+        self.is_tracking = asyncio.Event()
         self.task: Task = None
         self.aos_rotor_angles: tuple[float, float, float] | None = None
         self.sat_id: int | None = None
@@ -46,21 +46,19 @@ class Tracker:
             logger.error(f"Failed to stop tracker clients: {e}")
 
     async def status(self):
-        return {"status": "active" if self.is_tracking else "idle"}
+        return {"status": "active" if self.is_tracking.is_set() else "idle"}
 
     async def _finish_tracking(self):
         """Stop the tracking loop and reset tracking status."""
         await self.mount.stop_rotor()
         await asyncio.sleep(self.slew_interval)
-        self.is_tracking = False
+        self.is_tracking.clear()
         logger.info("Tracking successfully stopped.")
 
     async def stop_tracking(self):
         """Set shutdown event, stop the tracking loop and reset tracking status."""
         self.shutdown_event.set()
-        await self.mount.stop_rotor()
-        await asyncio.sleep(self.slew_interval)
-        self.is_tracking = False
+        await self.wait_for_tracking_complete()
         logger.info("Tracking successfully stopped.")
 
     async def setup_task(self, task: Task):
@@ -78,14 +76,21 @@ class Tracker:
 
     async def _slew_and_wait(self, az, el, angular_tolerance=0.3):
         """Rotate to a specific azimuth and elevation and wait until the position is reached."""
+        await self.wait_for_tracking_complete()
         await self.clear_shutdown_event()
         az, el = self._safe_az_el(az, el)
-        await asyncio.sleep(self.slew_interval)
         await self.mount.set(az, el)
-        await asyncio.sleep(self.slew_interval)
+        sleep_task = asyncio.create_task(asyncio.sleep(self.slew_interval))
+        shutdown_task = asyncio.create_task(self.shutdown_event.wait())
+        await asyncio.wait([sleep_task, shutdown_task], return_when=asyncio.FIRST_COMPLETED,)
+        if self.shutdown_event.is_set():
+            logger.info("Shutdown event triggered. Aborting slew.")
+            await self._finish_tracking()
+            return
+
         try:
             logger.info(f"Slewing to azimuth: {az}, elevation: {el}")
-            self.is_tracking = True
+            self.is_tracking.set()
             while not self.shutdown_event.is_set():
                 response = await self.mount.status()
                 current_az, current_el = response["azimuth"], response["elevation"]
@@ -100,13 +105,11 @@ class Tracker:
                     logger.info(f"az_err: {az_err}, el_err: {el_err}")
                     break
                 await asyncio.sleep(self.slew_interval)  # Wait 1s before checking state again
-            self.is_tracking = False
             logger.info("Slewing complete.")
         except Exception as e:
             logger.error(f"Unexpected error during slew: {e}")
         finally:
             await self._finish_tracking()
-            await asyncio.sleep(self.slew_interval)
 
     async def slew_to_home(self):
         az, el = self.config.az_home, self.config.el_home
@@ -127,10 +130,11 @@ class Tracker:
 
     async def track(self):
         """Track a space object until it reaches a minimum elevation or is manually stopped."""
+        await self.wait_for_tracking_complete()
         await self.clear_shutdown_event()
         try:
             logger.info("Starting tracking routine")
-            self.is_tracking = True
+            self.is_tracking.set()
             while not self.shutdown_event.is_set():
                 kinematic_state = await self.astrodynamics.get_kinematic_state(self.sat_id)
                 az, el = kinematic_state["az"], kinematic_state["el"]
@@ -142,7 +146,6 @@ class Tracker:
                 logger.info(f"Slewing to azimuth: {az}, elevation: {el}")
                 await self.mount.set(az, el)
                 await asyncio.sleep(self.slew_interval)
-            self.is_tracking = False
             logger.info("Tracking routine completed.")
         except Exception as e:
             logger.error(f"Unexpected error during tracking: {e}")
@@ -168,6 +171,11 @@ class Tracker:
     async def clear_shutdown_event(self):
         if self.shutdown_event is not None:
             self.shutdown_event.clear()
+
+    async def wait_for_tracking_complete(self):
+        while self.is_tracking.is_set():
+            logger.info("Waiting for tracking to complete..")
+            await asyncio.sleep(self.slew_interval)
 
 
 class AOSPath:

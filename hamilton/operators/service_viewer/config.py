@@ -27,6 +27,7 @@ class ServiceViewerControllerConfig(MessageNodeConfig):
         "hamilton-relay-controller",
         "hamilton-sdr-controller",
         "hamilton-service-viewer",
+        "hamilton-tracker",
     ]
 
     UPDATE_INTERVAL = 60 * 5 # seconds

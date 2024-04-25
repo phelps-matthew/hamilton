@@ -44,7 +44,7 @@ class Orchestrator:
         await self.stop_orchestrating()
         for client in self.client_list:
             try:
-                await client.stop_orchestrating()
+                await client.stop()
             except Exception as e:
                 logger.error(f"An error occured while stopping {client}: {e}")
 
@@ -75,8 +75,7 @@ class Orchestrator:
             aos_time = self.task["parameters"]["aos"]["time"]
             los_time = self.task["parameters"]["los"]["time"]
             aos_pre_sleep = aos_time - datetime.now(timezone.utc)
-            #aos_los_sleep = los_time - aos_time
-            aos_los_sleep = timedelta(seconds=20)
+            aos_los_sleep = los_time - aos_time
 
             # Sleep until AOS
             logger.info(f"Waiting for AOS. Sleeping for {aos_pre_sleep.total_seconds()} seconds.")
@@ -106,8 +105,8 @@ class Orchestrator:
             )
             if self.shutdown_event.is_set():
                 logger.info("Shutdown event triggered. Stopping tracking and recording.")
-                await self.tracker.stop_tracking()
                 await self.sdr.stop_record()
+                await self.tracker.stop_tracking()
                 await self.stop_orchestrating()
                 return
 
@@ -115,6 +114,9 @@ class Orchestrator:
             logger.info("Stopping tracking and recording.")
             await self.sdr.stop_record()
             await self.tracker.stop_tracking()
+
+            # Slew back to home base
+            await self.tracker.slew_to_home()
 
             # Finished
             await self.stop_orchestrating()
