@@ -20,7 +20,7 @@ async def handle_command(args):
 
         if args.command == "start_record":
             params = {"freq": args.freq, "sample_rate": args.sample_rate, "sat_id": args.sat_id, "rx_gain": args.rx_gain}
-            response = await client.start_record(**params)
+            response = await client.start_record(params)
 
         elif args.command == "stop_record":
             response = await client.stop_record()

@@ -76,7 +76,8 @@ class SDRSigMFRecord:
 
     def update_parameters(self, params: dict):
         """Called by external service"""
-        logger.info("Updating flowgraph attributes")
+        logger.info("Updating flowgraph attributes:")
+        logger.info(json.dumps(params, indent=4))
         for param_name, value in params.items():
             setter_method_name = f"set_{param_name}"
             if hasattr(self, setter_method_name):
