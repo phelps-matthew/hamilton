@@ -59,7 +59,11 @@ class TaskGenerator:
         aos_los = await self.astrodynamics.get_aos_los(sat_id)
         interpolated_orbit = await self.astrodynamics.get_interpolated_orbit(sat_id)
         downlink_freqs = await self.radiometrics.get_downlink_freqs(sat_id)
-        freq = downlink_freqs[0] if downlink_freqs else 433e6
+        if downlink_freqs:
+            freq = downlink_freqs[0]
+        else:
+            logger.error(f"No downlink freqs found for sat_id {sat_id}")
+            return None
         task_id = str(uuid.uuid4())
 
         task = {
