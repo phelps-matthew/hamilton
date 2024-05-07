@@ -71,11 +71,11 @@ async def main():
         response = await client.status()
         print(response)
 
-        parameters = {"freq": 144e6, "sat_id": "test"}
+        parameters = {"freq": 144e6, "sat_id": "39427"}
         response = await client.start_record(parameters)
         print(response)
 
-        time.sleep(10)
+        time.sleep(4)
         #print(await client.status())
         #time.sleep(5)
 
