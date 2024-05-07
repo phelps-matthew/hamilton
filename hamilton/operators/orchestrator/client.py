@@ -74,7 +74,7 @@ async def main():
         await client.start()
         await task_generator.start()
 
-        sat_id = "41339"
+        sat_id = "55009"
         task = await task_generator.generate_task(sat_id)
         print(json.dumps(task, cls=CustomJSONEncoder, indent=4))
 
