@@ -71,7 +71,7 @@ async def main():
 
         # Sample ids with 2x freqs, 1x freqs, 0x freqs
         #sat_ids = ["25397", "39433", "57186"]
-        sat_ids = ["43156"]
+        sat_ids = ["39427"]
 
         for sat_id in sat_ids:
             response = await client.get_tx_profile(sat_id)
