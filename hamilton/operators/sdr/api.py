@@ -8,6 +8,8 @@ from datetime import datetime
 from hamilton.operators.sdr.config import SDRControllerConfig
 from hamilton.operators.sdr.flowgraphs.record_sigmf import SigMFRecordFlowgraph
 from hamilton.operators.relay.client import RelayClient
+from hamilton.operators.radiometrics.client import RadiometricsClient
+from hamilton.common.utils import CustomJSONEncoder
 from pathlib import Path
 import logging
 import json
@@ -16,9 +18,10 @@ logger = logging.getLogger(__name__)
 
 
 class SDRSigMFRecord:
-    def __init__(self, config: SDRControllerConfig, relay_client: RelayClient):
+    def __init__(self, config: SDRControllerConfig, relay_client: RelayClient, radiometrics_client: RadiometricsClient = None):
         self.config = config
         self.relay = relay_client
+        self.radiometrics = radiometrics_client
         self.flowgraph = None
         self.obs_dir = Path(self.config.observations_dir).expanduser()
         self.obs_dir.mkdir(parents=True, exist_ok=True)
@@ -32,6 +35,7 @@ class SDRSigMFRecord:
         self.sat_id = "norad-id"
         self.band = "UHF"
         self.ch0_antenna = "RX2"
+        self.metadata = None
 
     def get_status(self):
         return {"status": "recording" if self.is_recording else "idle"}
@@ -64,6 +68,13 @@ class SDRSigMFRecord:
                 logger.info(f"Overwriting sample rate in {str(meta_path)}")
                 json.dump(metadata, f, indent=4)
 
+    async def write_metadata(self):
+        if self.filename is not None:
+            meta_path = Path(self.filename).with_suffix(".json")
+            with open(meta_path, 'w') as f:
+                logger.info(f"Writing metadata to {str(meta_path)}")
+                json.dump(self.metadata, f, indent=4, cls=CustomJSONEncoder)
+
     async def set_lna(self, state: Literal["on", "off"] = "off"):
         """Switch appropriate power relay based on value of `self.freq` and `state`"""
         if self.freq <= self.config.VHF_HIGH:
@@ -74,7 +85,7 @@ class SDRSigMFRecord:
         logger.info(f"Relay id {parameters['id']} set to state {parameters['state']}")
         return response
 
-    def update_parameters(self, params: dict):
+    async def update_parameters(self, params: dict):
         """Called by external service"""
         logger.info("Updating flowgraph attributes:")
         logger.info(json.dumps(params, indent=4))
@@ -86,6 +97,7 @@ class SDRSigMFRecord:
                 logger.info(f"Applied {setter_method_name} with value {value}")
         self.band = "VHF" if self.freq <= self.config.VHF_HIGH else "UHF"
         self.ch0_antenna = "TX/RX" if self.band == "VHF" else "RX2"
+        self.metadata = await self.radiometrics.get_tx_profile(self.sat_id)
 
     def initialize_flowgraph(self):
         """Update params within flowgraph"""
@@ -121,6 +133,7 @@ class SDRSigMFRecord:
                 self.flowgraph.stop()
                 self.flowgraph.wait()  # Waits for all processing to stop
                 self.overwrite_sample_rate() # sigmf has issue logging correct sample rate
+                await self.write_metadata() # log the database metadata file as json
             self.is_recording = False
             logger.info("Flowgraph stopped")
             await self.set_lna("off")

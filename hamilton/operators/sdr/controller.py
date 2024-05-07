@@ -6,25 +6,29 @@ from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.messaging.interfaces import MessageHandler
 from hamilton.operators.relay.client import RelayClient
+from hamilton.operators.radiometrics.client import RadiometricsClient
 from hamilton.operators.sdr.api import SDRSigMFRecord
 from hamilton.operators.sdr.config import SDRControllerConfig
 
 
 class SDRCommandHandler(MessageHandler):
-    def __init__(self, recorder: SDRSigMFRecord, relay: RelayClient):
+    def __init__(self, recorder: SDRSigMFRecord, relay: RelayClient, radiometrics: RadiometricsClient):
         super().__init__(message_type=MessageHandlerType.COMMAND)
         self.recorder: SDRSigMFRecord = recorder
         self.relay: RelayClient = relay
-        self.startup_hooks = [self._start_relay]
+        self.radiometrics: RadiometricsClient = radiometrics
+        self.startup_hooks = [self._start_devices]
         self.shutdown_hooks = [self._stop_devices]
         self.routing_key_base = "observatory.sdr.telemetry"
 
-    async def _start_relay(self):
+    async def _start_devices(self):
         await self.relay.start()
+        await self.radiometrics.start()
 
     async def _stop_devices(self):
         await self.recorder.stop_record()
         await self.relay.stop()
+        await self.radiometrics.stop()
 
     async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> None:
         response = None
@@ -37,7 +41,7 @@ class SDRCommandHandler(MessageHandler):
         elif command == "start_record":
             telemetry_type = "status"
             if not self.recorder.is_recording:
-                self.recorder.update_parameters(parameters)
+                await self.recorder.update_parameters(parameters)
                 await self.recorder.start_record()
 
         elif command == "stop_record":
@@ -56,8 +60,9 @@ class SDRController(AsyncMessageNodeOperator):
         if config is None:
             config = SDRControllerConfig()
         relay = RelayClient()
-        recorder = SDRSigMFRecord(config=config, relay_client=relay)
-        handlers = [SDRCommandHandler(recorder, relay)]
+        radiometrics = RadiometricsClient()
+        recorder = SDRSigMFRecord(config=config, relay_client=relay, radiometrics_client=radiometrics)
+        handlers = [SDRCommandHandler(recorder, relay, radiometrics)]
         super().__init__(config, handlers, shutdown_event)
 
 

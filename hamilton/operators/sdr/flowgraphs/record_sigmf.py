@@ -36,7 +36,7 @@ class SigMFRecordFlowgraph(gr.top_block):
         rx_gain=40,
         sat_id="flowgraph_default_sat_id",
         ch0_antenna="RX2",
-        filename="flowgraph_sample_filename"
+        filename="flowgraph_sample_filename",
     ):
         gr.top_block.__init__(self, "SigMFRecording", catch_exceptions=True)
 
@@ -98,8 +98,8 @@ class SigMFRecordFlowgraph(gr.top_block):
         self.sigmf_sink_0.set_global_meta("core:author", "Matthew Phelps")
         self.sigmf_sink_0.set_global_meta("core:license", "")
         self.sigmf_sink_0.set_global_meta("core:hw", "crossed-yagi_PGA-103+_B200")
+        #self.sigmf_sink_0.set_global_meta("custom:metadata", self.metadata)
 
-        # self.sigmf_sink_0.set_global_meta("mysat_id", sat_id)
         self.rational_resampler_xxx_0 = filter.rational_resampler_ccc(
             interpolation=int(target_samp_rate), decimation=int(samp_rate), taps=[], fractional_bw=0
         )
@@ -163,7 +163,6 @@ class SigMFRecordFlowgraph(gr.top_block):
 
     def get_ch0_antenna(self):
         self.uhd_usrp_source_0.get_antenna(0)
-
 
 def main(top_block_cls=SigMFRecordFlowgraph, options=None):
     tb = top_block_cls()
