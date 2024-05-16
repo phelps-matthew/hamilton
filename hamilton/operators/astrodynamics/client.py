@@ -1,6 +1,6 @@
 import asyncio
 import signal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from hamilton.operators.astrodynamics.config import AstrodynamicsClientConfig
@@ -41,25 +41,23 @@ class AstrodynamicsClient(AsyncMessageNodeOperator):
     async def get_kinematic_state(self, sat_id: str, time: Optional[datetime] = None) -> dict[str, Any]:
         command = "get_kinematic_state"
         parameters = {"sat_id": sat_id, "time": time}
-        return await self._publish_command(command, parameters)
+        return await self._publish_command(command, parameters, rpc=True)
 
-    async def get_aos_los(
-        self, sat_id: str, time: Optional[datetime] = None, delta_t: int = 12
-    ) -> dict[str, Any]:
+    async def get_aos_los(self, sat_id: str, time: Optional[datetime] = None, delta_t: int = 12) -> dict[str, Any]:
         command = "get_aos_los"
         parameters = {"sat_id": sat_id, "time": time, "delta_t": delta_t}
-        return await self._publish_command(command, parameters)
+        return await self._publish_command(command, parameters, rpc=True)
 
     async def get_interpolated_orbit(
         self, sat_id: str, aos: Optional[datetime] = None, los: Optional[datetime] = None
     ) -> dict[str, list[Any]]:
         command = "get_interpolated_orbit"
         parameters = {"sat_id": sat_id, "aos": aos, "los": los}
-        return await self._publish_command(command, parameters)
+        return await self._publish_command(command, parameters, rpc=True)
 
-    async def precompute_orbit(self, sat_id: str) -> None:
-        command = "precompute_orbit"
-        parameters = {"sat_id": sat_id}
+    async def recompute_all_orbits(self) -> None:
+        command = "recompute_all_orbits"
+        parameters = {}
         return await self._publish_command(command, parameters, rpc=False)
 
 
@@ -83,19 +81,19 @@ async def main():
         await client.start()
 
         sat_id = "39446"
-        response = await client.get_kinematic_state(sat_id=sat_id)
-        print(response)
+        #response = await client.get_kinematic_state(sat_id=sat_id)
+        #print(f"get_kinematic_state: {response}")
 
-        response = await client.get_aos_los(sat_id=sat_id)
-        print(response)
+        #response = await client.get_aos_los(sat_id=sat_id)
+        #print(f"get_aos_los: {response}")
 
-        aos = datetime.now()
-        los = aos + timedelta(hours=1)
-        response = await client.get_interpolated_orbit(sat_id=sat_id, aos=aos, los=los)
-        print(response)
+        #aos = datetime.now(tz=timezone.utc)
+        #los = aos + timedelta(hours=1)
+        #response = await client.get_interpolated_orbit(sat_id=sat_id, aos=aos, los=los)
+        #print(f"get_interpolated_orbit: {response}")
 
-        response = await client.precompute_orbit(sat_id=sat_id)
-        print(response)
+        response = await client.recompute_all_orbits()
+        print(f"recompute_all_orbits: {response}")
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")

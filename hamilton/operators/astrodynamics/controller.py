@@ -47,9 +47,9 @@ class AstrodynamicsCommandHandler(MessageHandler):
             los = parameters.get("los")
             response = await self.so_tracker.get_interpolated_orbit(sat_id, aos, los)
 
-        elif command == "precompute_orbit":
-            sat_id = parameters.get("sat_id")
-            response = await self.so_tracker.precompute_orbit(sat_id)
+        elif command == "recompute_all_orbits":
+            telemetry_type = None
+            response = await self.so_tracker.recompute_all_states()
 
         if telemetry_type is not None:
             routing_key = f"{self.routing_key_base}.{telemetry_type}"

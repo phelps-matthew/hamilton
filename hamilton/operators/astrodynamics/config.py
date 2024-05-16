@@ -44,7 +44,7 @@ class AstrodynamicsClientConfig(MessageNodeConfig):
                 "observatory.astrodynamics.command.get_kinematic_state",
                 "observatory.astrodynamics.command.get_aos_los",
                 "observatory.astrodynamics.command.get_interpolated_orbit",
-                "observatory.astrodynamics.command.precompute_orbit",
+                "observatory.astrodynamics.command.recompute_all_orbits",
             ],
         ),
     ]
