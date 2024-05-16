@@ -1,6 +1,6 @@
 [Unit]
 Description=Database Update Service
-Requires=rabbitmq-server.service
+Requires=rabbitmq-server.service hamilton-astrodynamics.service
 After=network.target rabbitmq-server.service hamilton-log-collector.service 
 # Defines the time period in which restart attempts are counted (seconds)
 StartLimitIntervalSec=60
