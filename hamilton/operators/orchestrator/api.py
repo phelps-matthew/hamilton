@@ -13,6 +13,7 @@ import logging
 from hamilton.operators.sdr.client import SDRClient
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.operators.tracker.client import TrackerClient
+from hamilton.operators.signal_processor.client import SignalProcessorClient
 from hamilton.base.task import Task
 
 logger = logging.getLogger(__name__)
@@ -23,13 +24,14 @@ class Orchestrator:
         try:
             self.sdr: SDRClient = SDRClient()
             self.tracker: TrackerClient = TrackerClient()
+            self.signal_processor: SignalProcessorClient = SignalProcessorClient()
         except Exception as e:
             logger.error(f"An error occured while initializing clients: {e}")
 
         self.is_running = False
         self.shutdown_event = asyncio.Event()
         self.task: Task = None
-        self.client_list: list[AsyncMessageNodeOperator] = [self.sdr, self.tracker]
+        self.client_list: list[AsyncMessageNodeOperator] = [self.sdr, self.tracker, self.signal_processor]
 
     async def start(self):
         logger.info("Starting Orchestrator.")
@@ -116,7 +118,13 @@ class Orchestrator:
             await self.tracker.stop_tracking()
 
             # Slew back to home base
+            logger.info("Slewing to home base.")
             await self.tracker.slew_to_home()
+
+            # Signal processing
+            logger.info("Signal processing.")
+            await self.signal_processor.generate_psds()
+            await self.signal_processor.generate_spectrograms()
 
             # Finished
             await self.stop_orchestrating()
