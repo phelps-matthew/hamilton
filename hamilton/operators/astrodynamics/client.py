@@ -29,11 +29,11 @@ class AstrodynamicsClient(AsyncMessageNodeOperator):
         super().__init__(config, handlers, shutdown_event)
         self.routing_key_base = "observatory.astrodynamics.command"
 
-    async def _publish_command(self, command: str, parameters: dict, rpc: bool = True) -> dict:
+    async def _publish_command(self, command: str, parameters: dict, rpc: bool = True, timeout: int = 10) -> dict:
         routing_key = f"{self.routing_key_base}.{command}"
         message = self.msg_generator.generate_command(command, parameters)
         if rpc:
-            response = await self.publish_rpc_message(routing_key, message)
+            response = await self.publish_rpc_message(routing_key, message, timeout=timeout)
         else:
             response = await self.publish_message(routing_key, message)
         return response
@@ -60,6 +60,11 @@ class AstrodynamicsClient(AsyncMessageNodeOperator):
         parameters = {}
         return await self._publish_command(command, parameters, rpc=False)
 
+    async def get_all_aos_los(self, start_time: datetime, end_time: datetime) -> dict[str, Any]:
+        command = "get_all_aos_los"
+        parameters = {"start_time": start_time, "end_time": end_time}
+        return await self._publish_command(command, parameters, rpc=True, timeout=60)
+
 
 shutdown_event = asyncio.Event()
 
@@ -81,19 +86,24 @@ async def main():
         await client.start()
 
         sat_id = "39446"
-        #response = await client.get_kinematic_state(sat_id=sat_id)
-        #print(f"get_kinematic_state: {response}")
+        # response = await client.get_kinematic_state(sat_id=sat_id)
+        # print(f"get_kinematic_state: {response}")
 
-        #response = await client.get_aos_los(sat_id=sat_id)
-        #print(f"get_aos_los: {response}")
+        # response = await client.get_aos_los(sat_id=sat_id)
+        # print(f"get_aos_los: {response}")
 
-        #aos = datetime.now(tz=timezone.utc)
-        #los = aos + timedelta(hours=1)
-        #response = await client.get_interpolated_orbit(sat_id=sat_id, aos=aos, los=los)
-        #print(f"get_interpolated_orbit: {response}")
+        # aos = datetime.now(tz=timezone.utc)
+        # los = aos + timedelta(hours=1)
+        # response = await client.get_interpolated_orbit(sat_id=sat_id, aos=aos, los=los)
+        # print(f"get_interpolated_orbit: {response}")
 
-        response = await client.recompute_all_orbits()
-        print(f"recompute_all_orbits: {response}")
+        # response = await client.recompute_all_orbits()
+        # print(f"recompute_all_orbits: {response}")
+
+        response = await client.get_all_aos_los(
+            start_time=datetime.now(tz=timezone.utc), end_time=datetime.now(tz=timezone.utc) + timedelta(hours=1)
+        )
+        print(f"get_all_aos_los: {response}")
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")

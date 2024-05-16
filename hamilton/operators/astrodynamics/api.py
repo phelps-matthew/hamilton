@@ -230,6 +230,24 @@ class SpaceObjectTracker:
 
             logger.info("Finished recomputing all orbits")
 
+    async def get_all_aos_los(self, start_time: datetime, end_time: datetime):
+        """Get all AOS/LOS events within a given time window, return list of events, sorted by ascending AOS"""
+        if not self.aos_los:
+            await self.recompute_all_states()
+        aos_los = self.aos_los
+        # Filter the aos_los dictionary into a list of tuples
+        aos_los_list = []
+        for sat_id, data in aos_los.items():
+            aos = data["aos"]["time"]
+            los = data["los"]["time"]
+            if aos is None or los is None:
+                continue
+            if start_time <= aos <= end_time:
+                aos_los_list.append((sat_id, aos, los))
+        # Sort the list by 'aos'
+        sorted_aos_los_list = sorted(aos_los_list, key=lambda x: x[1])
+        return sorted_aos_los_list
+
     @staticmethod
     def utc_to_local(time, tz="HST"):
         local_timezone = pytz.timezone(tz)

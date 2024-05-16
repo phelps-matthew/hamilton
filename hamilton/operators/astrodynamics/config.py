@@ -16,6 +16,7 @@ class AstrodynamicsControllerConfig(MessageNodeConfig):
                 "observatory.astrodynamics.telemetry.kinematic_state",
                 "observatory.astrodynamics.telemetry.aos_los",
                 "observatory.astrodynamics.telemetry.interpolated_orbit",
+                "observatory.astrodynamics.telemetry.all_aos_los",
             ],
         ),
     ]
@@ -45,6 +46,7 @@ class AstrodynamicsClientConfig(MessageNodeConfig):
                 "observatory.astrodynamics.command.get_aos_los",
                 "observatory.astrodynamics.command.get_interpolated_orbit",
                 "observatory.astrodynamics.command.recompute_all_orbits",
+                "observatory.astrodynamics.command.get_all_aos_los",
             ],
         ),
     ]

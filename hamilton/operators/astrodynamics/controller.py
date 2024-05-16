@@ -51,6 +51,12 @@ class AstrodynamicsCommandHandler(MessageHandler):
             telemetry_type = None
             response = await self.so_tracker.recompute_all_states()
 
+        elif command == "get_all_aos_los":
+            telemetry_type = "all_aos_los"
+            start_time = parameters.get("start_time")
+            end_time = parameters.get("end_time")
+            response = await self.so_tracker.get_all_aos_los(start_time, end_time)
+
         if telemetry_type is not None:
             routing_key = f"{self.routing_key_base}.{telemetry_type}"
             response = {} if response is None else response
