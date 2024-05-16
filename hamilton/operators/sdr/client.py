@@ -37,16 +37,16 @@ class SDRClient(AsyncMessageNodeOperator):
     async def status(self):
         command = "status"
         parameters = {}
-        return await self._publish_command(command, parameters)
+        return await self._publish_command(command, parameters, rpc=True)
 
     async def start_record(self, parameters: dict):
         command = "start_record"
-        return await self._publish_command(command, parameters)
+        return await self._publish_command(command, parameters, rpc=True)
 
     async def stop_record(self):
         command = "stop_record"
         parameters = {}
-        return await self._publish_command(command, parameters)
+        return await self._publish_command(command, parameters, rpc=True)
 
 
 shutdown_event = asyncio.Event()

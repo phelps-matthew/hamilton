@@ -9,6 +9,7 @@ import logging
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.WARNING)
 
+
 async def handle_command(args):
     client = SDRClient()
 
@@ -19,7 +20,8 @@ async def handle_command(args):
             response = await client.status()
 
         if args.command == "start_record":
-            params = {"freq": args.freq, "sample_rate": args.sample_rate, "sat_id": args.sat_id, "rx_gain": args.rx_gain}
+            # params = {"freq": args.freq, "sample_rate": args.sample_rate, "sat_id": args.sat_id, "rx_gain": args.rx_gain}
+            params = {"freq": args.freq, "sat_id": args.sat_id}
             response = await client.start_record(params)
 
         elif args.command == "stop_record":
@@ -43,14 +45,15 @@ if __name__ == "__main__":
 
     # Sub-command 'start_record'
     parser_start = subparsers.add_parser("start_record", help="Start recording")
-    parser_start.add_argument("--freq", type=float, required=True, help="Frequency in Hz")
+    parser_start.add_argument("--freq", type=float, required=False, default=433e6, help="Frequency in Hz")
     parser_start.add_argument("--sample_rate", type=float, required=False, help="Sample rate in S/s")
-    parser_start.add_argument("--sat_id", type=str, required=False, help="Satellite ID or user provided ID")
+    parser_start.add_argument(
+        "--sat_id", type=str, required=False, default="NORAD_ID", help="Satellite ID or user provided ID"
+    )
     parser_start.add_argument("--rx_gain", type=int, required=False, help="RX gain in dB")
 
     # Sub-command 'stop_record'
     parser_stop = subparsers.add_parser("stop_record", help="Stop recording")
-
 
     args = parser.parse_args()
 
