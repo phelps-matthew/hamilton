@@ -13,6 +13,8 @@ setuptools.setup(
         "dash-bootstrap-components",
         "skyfield",
         "pytest-asyncio",
+        "sigmf",
+        "aio-pika",
     ]
 )
 
