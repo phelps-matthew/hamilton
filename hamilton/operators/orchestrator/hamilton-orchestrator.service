@@ -1,7 +1,7 @@
 [Unit]
 Description=Orchestrator Service
 Requires=rabbitmq-server.service hamilton-sdr.service hamilton-tracker.service
-After=rabbitmq-server.service hamilton-log-collector.service hamilton-sdr.service hamilton-tracker.service
+After=rabbitmq-server.service hamilton-log-collector.service hamilton-sdr-controller.service hamilton-tracker.service
 # Defines the time period in which restart attempts are counted (seconds)
 StartLimitIntervalSec=60
 [Service]
