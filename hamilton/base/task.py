@@ -1,5 +1,5 @@
 from typing import TypedDict, Union, Dict, Any, Optional
-from datetime import datetime, UTC, timezone
+from datetime import datetime, UTC, timezone, timedelta
 from enum import Enum
 from hamilton.operators.astrodynamics.client import AstrodynamicsClient
 from hamilton.operators.radiometrics.client import RadiometricsClient
@@ -98,7 +98,13 @@ class TaskGenerator:
             return False
         current_time = datetime.now(timezone.utc)
 
-        if aos_time and los_time and aos_time < los_time and los_time > current_time:
+        if (
+            aos_time
+            and los_time
+            and aos_time < los_time
+            and los_time > current_time
+            and los_time - aos_time < timedelta(minutes=13)
+        ):
             return True
         else:
             logger.error(f"Invalid task. aos_time: {aos_time}, los_time: {los_time}, current_time: {current_time}")
