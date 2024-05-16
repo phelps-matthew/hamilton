@@ -286,6 +286,36 @@ class SatcomDBGenerator:
 
         return data
 
+    ## Filter out CW only signals ##
+    def filter(self, data: dict) -> dict:
+        """Filter out CW only signals"""
+        good_sats = []
+        for k, v in data.items():
+            tx_profile = v
+
+            je9pel_downlinks = []
+            if tx_profile["je9pel"] is not None:
+                for link in tx_profile["je9pel"]["downlink"]:
+                    if link["active"]:
+                        if link["low"] is not None:
+                            je9pel_downlinks.append(link["low"])
+                        elif link["high"] is not None:
+                            je9pel_downlinks.append(link["high"])
+
+            satnogs_downlinks = []
+            for transmitter in tx_profile["transmitters"]:
+                freq = transmitter["downlink_low"]
+                mode = transmitter["mode"]
+                if freq is not None and mode.lower() != "cw":
+                    satnogs_downlinks.append(freq)
+
+            downlinks = set(je9pel_downlinks + satnogs_downlinks)
+            if len(downlinks) > 0:
+                good_sats.append(k)
+
+        return {k: v for k, v in data.items() if k in good_sats}
+
+
     ## Entrypoint ##
 
     def generate_db(self, use_cache: bool = False) -> dict:
@@ -309,6 +339,10 @@ class SatcomDBGenerator:
         # Merge with JE9PEL
         je9pel_data = self.je9pel.generate_db(use_cache=use_cache)
         data = self.merge_with_je9pel(data, je9pel_data)
+
+        # Filter CW only signals
+        data = self.filter(data)
+
         logger.info(f"Total number of observable satellites: {len(data)}")
         logger.info("SATCOM database generation complete.")
 
@@ -328,5 +362,5 @@ class SatcomDBGenerator:
 if __name__ == "__main__":
     je9pel = JE9PELGenerator(DBUpdaterConfig)
     generator = SatcomDBGenerator(DBUpdaterConfig, je9pel)
-    data = generator.generate_db(use_cache=False)
+    data = generator.generate_db(use_cache=True)
     generator.write_db(data)
