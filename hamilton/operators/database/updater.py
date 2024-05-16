@@ -8,6 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from hamilton.operators.database.setup_db import setup_and_index_db
 from hamilton.operators.database.generators.je9pel_generator import JE9PELGenerator
 from hamilton.operators.database.generators.satcom_db_generator import SatcomDBGenerator
+from hamilton.operators.astrodynamics.client import AstrodynamicsClient
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class DBUpdater(AsyncMessageNodeOperator):
         self.routing_key_base = "observatory.database.telemetry"
         self.db_client: AsyncIOMotorClient = None
         self.db: AsyncIOMotorDatabase = None
+        self.astrodynamics = AstrodynamicsClient()
 
     async def _setup_and_index_db(self):
         self.db_client, self.db = await setup_and_index_db()
@@ -47,6 +49,9 @@ class DBUpdater(AsyncMessageNodeOperator):
             async with session.start_transaction():
                 await self.db[self.config.mongo_collection_name].delete_many({}, session=session)
                 await self.db[self.config.mongo_collection_name].insert_many(data.values(), session=session)
+            
+        # Recompute all orbits in Astrodynamics service
+        await self.astrodynamics.recompute_all_orbits()
 
         # Send telemetry indicating db update finished
         await self._publish_db_update_telemetry("finished")
@@ -55,6 +60,7 @@ class DBUpdater(AsyncMessageNodeOperator):
     async def start(self) -> None:
         await self.node.start()
         await self._setup_and_index_db()
+        await self.astrodynamics.start()
 
         while not shutdown_event.is_set():
             await self.update_database()
@@ -72,6 +78,7 @@ class DBUpdater(AsyncMessageNodeOperator):
     async def stop(self) -> None:
         await self.node.stop()
         self.db_client.close()
+        await self.astrodynamics.stop()
 
 
 shutdown_event = asyncio.Event()
