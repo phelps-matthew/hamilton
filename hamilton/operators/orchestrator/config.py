@@ -14,6 +14,7 @@ class OrchestatorControllerConfig(MessageNodeConfig):
     ]
     publishings = [
         Publishing(exchange="orchestrator", rpc=False, routing_keys=["observatory.orchestrator.telemetry.status"]),
+        Publishing(exchange="orchestrator", rpc=False, routing_keys=["observatory.orchestrator.telemetry.status_event"]),
     ]
 
 

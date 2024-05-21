@@ -60,7 +60,7 @@ class OrchestratorController(AsyncMessageNodeOperator):
         orchestrator = Orchestrator()
         handlers = [OrchestratorCommandHandler(config, orchestrator)]
         super().__init__(config, handlers, shutdown_event)
-
+        orchestrator.set_node_operations(self.node)
 
 shutdown_event = asyncio.Event()
 

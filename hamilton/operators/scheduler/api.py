@@ -1,12 +1,10 @@
 import asyncio
 import logging
-import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from hamilton.base.task import Task, TaskGenerator
-from hamilton.operators.radiometrics.client import RadiometricsClient
-from hamilton.operators.astrodynamics.client import AstrodynamicsClient
 from hamilton.operators.orchestrator.client import OrchestratorClient
+from hamilton.operators.astrodynamics.client import AstrodynamicsClient
 
 logger = logging.getLogger(__name__)
 
@@ -16,15 +14,18 @@ class Scheduler:
         try:
             self.task_generator: TaskGenerator = TaskGenerator()
             self.orchestrator: OrchestratorClient = OrchestratorClient()
+            self.astrodynamics: AstrodynamicsClient = AstrodynamicsClient()
         except Exception as e:
             logger.error(f"An error occurred while initializing Scheduler: {e}")
-        self.client_list = [self.task_generator, self.orchestrator]
-        self.targets: list[str] = []
-        self.task_queue: list[Task] = []
-        self.queue_non_empty_event = asyncio.Event()
+        self.client_list = [self.task_generator, self.orchestrator, self.astrodynamics]
+        self.last_dispatched_task = None
         self.is_running = False
-        self.refresh_interval = timedelta(hours=2)
-        self.dispatch_buffer = timedelta(minutes=2)
+        self.dispatch_buffer = timedelta(minutes=6)
+        self.queue_length = 10
+        self.task_queue: asyncio.Queue = asyncio.Queue(maxsize=self.queue_length)
+        self.shutdown_event = asyncio.Event()
+        self.orchestrator_status_event = asyncio.Event()
+        self.current_mode = None
 
     async def start(self):
         logger.info("Starting Scheduler.")
@@ -52,168 +53,122 @@ class Scheduler:
     async def status(self) -> dict:
         return {
             "is_running": self.is_running,
-            "targets": self.targets,
-            "queued_tasks": [task["task_id"] for task in self.task_queue],
+            "queue": list(self.task_queue._queue),
         }
 
-    async def add_target(self, sat_id: str):
-        if sat_id not in self.targets:
-            self.targets.append(sat_id)
-            logger.info(f"Added target: {sat_id}")
+    async def set_orchestrator_status_event(self, status: str):
+        if status == "active":
+            self.orchestrator_status_event.set()
+        elif status == "idle":
+            self.orchestrator_status_event.clear()
+
+    async def retrieve_tasks_from_db(self, start_time: datetime = None, end_time: datetime = None) -> list[Task]:
+        """Retrieve satellite records with AOS between `start_time` and `end_time`, ascending in AOS."""
+        if start_time is None:
+            start_time = datetime.now(timezone.utc)
+        if end_time is None:
+            end_time = datetime.now(timezone.utc) + timedelta(hours=1)
+        sats_aos_los = await self.astrodynamics.get_all_aos_los(start_time, end_time)
+        task_list = []
+        for sat_id, aos, los in sats_aos_los:
+            task = await self.task_generator.generate_task(sat_id)
+            if task is not None:
+                task_list.append(task)
+
+        logger.info(f"Tasks retrieved: {len(task_list)}")
+        return task_list
+
+    async def enqueue_task_manual(self, task: Task):
+        """Force insert a specific task into the queue, such as that received from a CollectRequest."""
+        await self.task_queue.put(task)
+
+    async def enqueue_tasks(self):
+        """Enqueue tasks, respecting dispatch buffer time and AOS/LOS overlap."""
+        if self.task_queue.full():
+            return
+
+        if self.task_queue.empty():
+            if self.last_dispatched_task is None:
+                # No previous task, start from the current time
+                start_time = datetime.now(timezone.utc)
+            else:
+                # Use the LOS of the last dispatched task plus the buffer
+                start_time = self.last_dispatched_task["parameters"]["los"]["time"] + self.dispatch_buffer
         else:
-            logger.warning(f"Target {sat_id} already exists.")
+            last_task = self.task_queue[-1]
+            start_time = last_task["parameters"]["los"]["time"] + self.dispatch_buffer
 
-    async def remove_target(self, sat_id: str):
-        if sat_id in self.targets:
-            self.targets.remove(sat_id)
-            logger.info(f"Removed target: {sat_id}")
-        else:
-            logger.warning(f"Target {sat_id} does not exist.")
-
-    async def force_refresh(self):
-        logger.info("Forcing task refresh.")
-        await self._refresh_tasks()
-
-    async def run(self):
-        logger.info("Starting scheduling loop.")
-        while self.is_running and not self.shutdown_event.is_set():
-            await self._refresh_tasks()
-            await self._dispatch_tasks()
-            await asyncio.wait(
-                [self.shutdown_event.wait(), asyncio.sleep(self.dispatch_buffer.total_seconds())],
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-
-    async def _refresh_tasks(self):
-        logger.info("Refreshing tasks.")
-        new_tasks = []
-        for sat_id in self.targets:
-            task = await self._generate_task(sat_id)
-            if task:
-                new_tasks.append(task)
-        if new_tasks:
-            self._update_task_queue(new_tasks)
-            self.queue_non_empty_event.set()
-
-    def _update_task_queue(self, new_tasks: list[Task]):
-        self.task_queue = self._remove_matching_tasks(self.task_queue, new_tasks)
-        self.task_queue.extend(new_tasks)
-        self.task_queue.sort(key=lambda t: t["parameters"]["aos"]["time"])
-        self.task_queue = self._remove_overlapping_tasks(self.task_queue)
-
-    def _remove_matching_tasks(self, existing_tasks: list[Task], new_tasks: list[Task]) -> list[Task]:
-        non_matching_tasks = []
-        for existing_task in existing_tasks:
-            if not any(self._tasks_match(existing_task, new_task) for new_task in new_tasks):
-                non_matching_tasks.append(existing_task)
-        return non_matching_tasks
-
-    def _tasks_match(self, task1: Task, task2: Task) -> bool:
-        return (
-            task1["parameters"]["sat_id"] == task2["parameters"]["sat_id"]
-            and task1["parameters"]["aos"]["time"] == task2["parameters"]["aos"]["time"]
-            and task1["parameters"]["los"]["time"] == task2["parameters"]["los"]["time"]
-        )
-
-    def _remove_overlapping_tasks(self, tasks: list[Task]) -> list[Task]:
-        non_overlapping_tasks = []
+        end_time = start_time + timedelta(hours=4)
+        tasks = await self.retrieve_tasks_from_db(start_time=start_time, end_time=end_time)
         for task in tasks:
-            if not any(self._tasks_overlap(task, t) for t in non_overlapping_tasks):
-                non_overlapping_tasks.append(task)
-        return non_overlapping_tasks
+            aos = task["parameters"]["aos"]["time"]
+            los = task["parameters"]["los"]["time"]
+            if self.task_queue.empty() or (
+                aos >= self.task_queue._queue[-1]["parameters"]["los"]["time"] + self.dispatch_buffer
+            ):
+                logger.info(f"Adding task_id:{task['task_id']}, sat_id:{task['parameters']['sat_id']} to queue")
+                await self.task_queue.put(task)
+                if self.task_queue.full():
+                    break
+        logger.info(f"Queue length: {self.task_queue.qsize()}")
+        for task in self.task_queue._queue:
+            aos = task["parameters"]["aos"]["time"].isoformat()
+            los = task["parameters"]["los"]["time"].isoformat()
+            logger.info(f"aos: {aos}, los: {los}")
 
-    def _tasks_overlap(self, task1: Task, task2: Task) -> bool:
-        aos1 = task1["parameters"]["aos"]["time"]
-        los1 = task1["parameters"]["los"]["time"]
-        aos2 = task2["parameters"]["aos"]["time"]
-        los2 = task2["parameters"]["los"]["time"]
+    async def dispatch_task_from_queue(self, task) -> None:
+        """Dispatch the next task from the queue to the orchestrator."""
+        await self.orchestrator.orchestrate(task)
+        self.last_dispatched_task = task
 
-        return (aos1 <= aos2 <= los1) or (aos1 <= los2 <= los1) or (aos2 <= aos1 <= los2) or (aos2 <= los1 <= los2)
-
-    async def _dispatch_tasks(self):
-        while not self.shutdown_event.is_set():
-            # Wait until the queue is non-empty or the shutdown event is set
-            if not self.task_queue:
-                await asyncio.wait(
-                    [self.shutdown_event.wait(), self.queue_non_empty_event.wait()], return_when=asyncio.FIRST_COMPLETED
-                )
-                if self.shutdown_event.is_set():
-                    break  # Exit if the scheduler is stopping
-
-            # It's possible for the task queue to become empty again before this point, so check again
-            while self.task_queue and not self.shutdown_event.is_set():
-                self.queue_non_empty_event.clear()  # Clear the event until new tasks are added again
-                current_time = datetime.now(timezone.utc)
-                task = self.task_queue[0]
-                aos_time = task["parameters"]["aos"]["time"]
-                los_time = task["parameters"]["los"]["time"]
-                time_until_aos = (aos_time - current_time).total_seconds() - self.dispatch_buffer.total_seconds()
-
-                if time_until_aos > 0:
-                    # Wait until it's time to dispatch the task, considering the dispatch buffer
-                    await asyncio.wait(
-                        [self.shutdown_event.wait(), asyncio.sleep(time_until_aos)], return_when=asyncio.FIRST_COMPLETED
-                    )
-                    if self.shutdown_event.is_set():
-                        break  # Exit if the scheduler is stopping
-
-                # Re-check the current time after waiting
-                current_time = datetime.now(timezone.utc)
-                if current_time >= aos_time - self.dispatch_buffer and current_time <= los_time:
-                    self.task_queue.pop(0)
-                    await self.orchestrator.orchestrate(task)
-                    logger.info(f"Dispatched task: {task['task_id']}")
-                    # Wait until LOS time or shutdown event
-                    await asyncio.wait(
-                        [self.shutdown_event.wait(), asyncio.sleep((los_time - current_time).total_seconds())],
-                        return_when=asyncio.FIRST_COMPLETED,
-                    )
-                    await self.orchestrator.stop_tracking()
-                    logger.info(f"Task {task['task_id']} completed.")
-                else:
-                    # If the current time is beyond LOS, remove the task without dispatching
-                    self.task_queue.pop(0)
-                    logger.info(f"Task {task['task_id']} skipped, beyond LOS time.")
-
-    async def _generate_task(self, sat_id: str) -> Optional[Task]:
-        aos_los = await self.astrodynamics.get_aos_los(sat_id)
-        interpolated_orbit = await self.astrodynamics.interpolate_orbit(sat_id)
-        downlink_freqs = await self.radiometrics.get_downlink_freqs(sat_id)
-
-        task = {
-            "source": "hamilton",
-            "timestamp": datetime.now().isoformat(),
-            "task_id": str(uuid.uuid4()),
-            "task_type": "leo_track",
-            "parameters": {
-                "sat_id": sat_id,
-                "aos": aos_los.get("aos", None),
-                "tca": aos_los.get("tca", None),
-                "los": aos_los.get("los", None),
-                "sdr": {"sat_id": sat_id, "freq": downlink_freqs[0]},
-                "interpolated_orbit": interpolated_orbit,
-            },
-        }
-
-        if self._validate_task(task):
-            return task
+    async def set_mode(self, mode: str = "survey") -> None:
+        """Switch between different modes of operation."""
+        self.current_mode = mode
+        if mode == "survey":
+            await self.run_survey()
+        elif mode == "standby":
+            await self.run_standby()
+        elif mode == "inactive":
+            await self.run_inactive()
         else:
-            logger.error(f"Generated task for {sat_id} is invalid.")
-            return None
+            logger.error(f"Unknown mode: {mode}")
 
-    def _validate_task(self, task: Task) -> bool:
-        parameters = task["parameters"]
-        if not parameters:
-            return False
-        try:
-            aos_time = parameters["aos"]["time"]
-            los_time = parameters["los"]["time"]
-        except KeyError:
-            return False
-        current_time = datetime.now(timezone.utc)
+    async def run_survey(self):
+        """Run survey mode to continuously enqueue and dispatch tasks."""
+        logger.info("Running survey mode.")
+        while self.current_mode == "survey" and not self.shutdown_event.is_set():
+            logger.info("Waiting for orchestrator status event.")
+            await self.orchestrator_status_event.wait()
+            logger.info("Orchestrator status event set. Enqueuing new tasks.")
+            await self.enqueue_tasks()
+            next_task = await self.task_queue.get()
+            sleep_time = (next_task["parameters"]["aos"]["time"] - datetime.now(timezone.utc)).total_seconds()
+            sleep_time -= 60 # time to slew to AOS
+            if sleep_time > 0:
+                logger.info(f"Sleeping until AOS for {sleep_time} seconds.")
+                await asyncio.sleep(sleep_time)
+            logger.info("Dispatching task from queue.")
+            await self.dispatch_task_from_queue(next_task)
 
-        if aos_time and los_time and aos_time < los_time and los_time > current_time:
-            return True
-        else:
-            return False
+    async def run_standby(self):
+        """Run standby mode to dispatch manually inserted tasks."""
+        logger.info("Running standby mode.")
+        while self.current_mode == "standby" and not self.shutdown_event.is_set():
+            logger.info("Waiting for orchestrator status event.")
+            await self.orchestrator_status_event.wait()
+            logger.info("Orchestrator status event set.")
+            logger.info("Waiting for non-empty queue")
+            next_task = await self.task_queue.get()
+            sleep_time = (next_task["parameters"]["aos"]["time"] - datetime.now(timezone.utc)).total_seconds()
+            sleep_time -= 60 # time to slew to AOS
+            if sleep_time > 0:
+                logger.info(f"Sleeping until AOS for {sleep_time} seconds.")
+                await asyncio.sleep(sleep_time)
+            logger.info("Dispatching task from queue.")
+            await self.dispatch_task_from_queue(next_task)
 
+    async def run_inactive(self):
+        """Deactivate all scheduling."""
+        logger.info("Scheduler is inactive. No tasks will be dispatched.")
+        while self.current_mode == "inactive" and not self.shutdown_event.is_set():
+            await asyncio.sleep(10)  # Sleep to prevent busy-waiting

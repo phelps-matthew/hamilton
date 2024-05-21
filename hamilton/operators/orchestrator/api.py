@@ -28,10 +28,21 @@ class Orchestrator:
         except Exception as e:
             logger.error(f"An error occured while initializing clients: {e}")
 
+        self.node_operations = None
         self.is_running = False
         self.shutdown_event = asyncio.Event()
         self.task: Task = None
         self.client_list: list[AsyncMessageNodeOperator] = [self.sdr, self.tracker, self.signal_processor]
+
+    def set_node_operations(self, node_operations: AsyncMessageNodeOperator):
+        self.node_operations = node_operations
+
+    async def publish_status_event(self, message: dict):
+        routing_key_base = "observatory.orchestrator.telemetry"
+        telemetry_type = "status_event"
+        routing_key = f"{routing_key_base}.{telemetry_type}"
+        telemetry_msg = self.node_operations.msg_generator.generate_telemetry(telemetry_type, message)
+        await self.node_operations.publish_message(routing_key, telemetry_msg)
 
     async def start(self):
         logger.info("Starting Orchestrator.")
@@ -54,6 +65,7 @@ class Orchestrator:
         """Stop the orchestration loop and reset orchestration status."""
         self.shutdown_event.set()
         self.is_running = False
+        await self.publish_status_event({"status": "idle"})
         logger.info("Orchestration routine has been successfully stopped.")
 
     async def status(self):
@@ -67,6 +79,7 @@ class Orchestrator:
         logger.info("Starting orchestration...")
         self.is_running = True
         await self.clear_shutdown_event()
+        await self.publish_status_event({"status": "active"})
 
         try:
             # Slew to AOS ready position
