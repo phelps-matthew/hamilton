@@ -69,7 +69,8 @@ class SchedulerController(AsyncMessageNodeOperator):
         super().__init__(config, handlers, shutdown_event)
 
     async def run(self):
-        await self.scheduler.enqueue_tasks()
+        self.scheduler.orchestrator_status_event.set()
+        await self.scheduler.set_mode("survey")
 
 
 shutdown_event = asyncio.Event()

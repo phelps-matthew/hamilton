@@ -95,7 +95,7 @@ class Scheduler:
                 # Use the LOS of the last dispatched task plus the buffer
                 start_time = self.last_dispatched_task["parameters"]["los"]["time"] + self.dispatch_buffer
         else:
-            last_task = self.task_queue[-1]
+            last_task = self.task_queue._queue[-1]
             start_time = last_task["parameters"]["los"]["time"] + self.dispatch_buffer
 
         end_time = start_time + timedelta(hours=4)
