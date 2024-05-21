@@ -150,13 +150,27 @@ class SpaceObjectTracker:
 
                 full_event_map = {key: {"time": None, "kinematic_state": None} for key in ["aos", "tca", "los"]}
 
-                for key in full_event_map.keys():
-                    if event_map[key]:
-                        time = event_map[key][0]  # Here we only take the first occurance
-                        kinematic_state = await self.get_kinematic_state(sat_id, time=time)
-                        full_event_map[key] = {"time": time, "kinematic_state": kinematic_state}
+                # Iterate through the lists to find a valid combination of aos < tca < los
+                for i in range(len(event_map["aos"])):
+                    for j in range(len(event_map["tca"])):
+                        for k in range(len(event_map["los"])):
+                            if event_map["aos"][i] < event_map["tca"][j] < event_map["los"][k]:
+                                aos_time = event_map["aos"][i]
+                                tca_time = event_map["tca"][j]
+                                los_time = event_map["los"][k]
 
-                self.aos_los[sat_id] = full_event_map
+                                aos_kinematic_state = await self.get_kinematic_state(sat_id, time=aos_time)
+                                tca_kinematic_state = await self.get_kinematic_state(sat_id, time=tca_time)
+                                los_kinematic_state = await self.get_kinematic_state(sat_id, time=los_time)
+
+                                full_event_map["aos"] = {"time": aos_time, "kinematic_state": aos_kinematic_state}
+                                full_event_map["tca"] = {"time": tca_time, "kinematic_state": tca_kinematic_state}
+                                full_event_map["los"] = {"time": los_time, "kinematic_state": los_kinematic_state}
+
+                                self.aos_los[sat_id] = full_event_map
+                                return full_event_map
+
+                logger.error(f"No valid combination of aos < tca < los found for {sat_id}")
             except Exception as e:
                 logger.error(f"Failed to get aos_los for {sat_id}: {e}")
 
