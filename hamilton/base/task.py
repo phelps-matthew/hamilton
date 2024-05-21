@@ -103,7 +103,7 @@ class TaskGenerator:
             and los_time
             and aos_time < los_time
             and los_time > current_time
-            and los_time - aos_time < timedelta(minutes=13)
+            and los_time - aos_time < timedelta(minutes=15)
         ):
             return True
         else:
