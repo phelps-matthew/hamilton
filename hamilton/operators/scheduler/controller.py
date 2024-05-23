@@ -27,18 +27,18 @@ class SchedulerCommandHandler(MessageHandler):
         command = message["payload"]["commandType"]
         parameters = message["payload"]["parameters"]
 
-        if command == "set_mode":
-            telemetry_type = None
-            mode = parameters.get("mode")
-            await self.scheduler.set_mode(mode=mode)
-
         if command == "stop_scheduling":
             telemetry_type = None
             await self.scheduler.stop_scheduling()
 
-        elif command == "status":
+        if command == "status":
             telemetry_type = "status"
             response = await self.scheduler.status()
+
+        if command == "set_mode":
+            telemetry_type = None
+            mode = parameters.get("mode")
+            await self.scheduler.set_mode(mode=mode)
 
         if telemetry_type is not None:
             routing_key = f"{self.routing_key_base}.{telemetry_type}"
@@ -64,13 +64,9 @@ class SchedulerController(AsyncMessageNodeOperator):
     def __init__(self, config: SchedulerControllerConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
             config = SchedulerControllerConfig()
-        self.scheduler = Scheduler()
-        handlers = [SchedulerCommandHandler(self.scheduler)]
+        self.scheduler = Scheduler(shutdown_event)
+        handlers = [SchedulerCommandHandler(self.scheduler), OrchestratorStatusEventHandler(self.scheduler)]
         super().__init__(config, handlers, shutdown_event)
-
-    async def run(self):
-        self.scheduler.orchestrator_status_event.set()
-        await self.scheduler.set_mode("survey")
 
 
 shutdown_event = asyncio.Event()
@@ -91,16 +87,10 @@ async def main():
 
     try:
         await controller.start()
-        run_task = asyncio.create_task(controller.run())
-        shutdown_task = asyncio.create_task(shutdown_event.wait())
-
-        done, pending = await asyncio.wait([run_task, shutdown_task], return_when=asyncio.FIRST_COMPLETED)
-
-        for task in pending:
-            task.cancel()
+        await shutdown_event.wait()  # Wait for the shutdown signal
 
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"An unexpected error occurred in the controller: {e}")
 
     finally:
         await controller.stop()

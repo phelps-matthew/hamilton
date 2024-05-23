@@ -5,12 +5,14 @@ hamilton-scheduler enqueue --sat_id xxx --preempt
 import asyncio
 import signal
 from typing import Optional
+import json
 
 from hamilton.base.messages import MessageHandlerType, Message
 from hamilton.operators.scheduler.config import SchedulerClientConfig
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.messaging.interfaces import MessageHandler
 from hamilton.base.task import Task
+from hamilton.common.utils import CustomJSONEncoder
 
 
 class OrchestratorTelemetryHandler(MessageHandler):
@@ -38,30 +40,23 @@ class SchedulerClient(AsyncMessageNodeOperator):
             response = await self.publish_message(routing_key, message)
         return response
 
-    async def add_target(self, sat_id: str):
-        command = "add_target"
-        parameters = sat_id
-        return await self._publish_command(command, parameters, rpc=False)
-
-    async def remove_target(self, sat_id: str):
-        command = "remove_target"
-        parameters = sat_id
-        return await self._publish_command(command, parameters, rpc=False)
-
-    async def force_refresh(self):
-        command = "force_refresh"
+    async def stop_scheduling(self):
+        command = "stop_scheduling"
         parameters = {}
         return await self._publish_command(command, parameters, rpc=False)
 
-    async def stop(self):
-        command = "stop"
-        parameters = {}
+    async def set_mode(self, mode: str):
+        """
+        Args: mode: [survey, standby, inactive]
+        """
+        command = "set_mode"
+        parameters = {"mode": mode}
         return await self._publish_command(command, parameters, rpc=False)
 
     async def status(self):
         command = "status"
         parameters = {}
-        return await self._publish_command(command, parameters)
+        return await self._publish_command(command, parameters, rpc=True)
 
 
 shutdown_event = asyncio.Event()
@@ -84,9 +79,12 @@ async def main():
         await client.start()
 
         response = await client.status()
+        json.dumps(response, indent=4, cls=CustomJSONEncoder)
+
+        response = await client.set_mode("inactive")
         print(response)
 
-        response = await client.stop()
+        response = await client.set_mode("standby")
         print(response)
 
     except Exception as e:

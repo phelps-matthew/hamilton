@@ -11,6 +11,11 @@ class SchedulerControllerConfig(MessageNodeConfig):
             exchange="scheduler",
             routing_keys=["observatory.scheduler.command.*"],
         ),
+
+        Binding(
+            exchange="orchestrator",
+            routing_keys=["observatory.orchestrator.telemetry.status_event"],
+        ),
     ]
     publishings = [
         Publishing(exchange="scheduler", rpc=False, routing_keys=["observatory.scheduler.telemetry.status"]),
@@ -30,8 +35,9 @@ class SchedulerClientConfig(MessageNodeConfig):
             exchange="scheduler",
             rpc=True,
             routing_keys=[
-                "observatory.scheduler.command.enqueue_task",
+                "observatory.scheduler.command.set_mode",
                 "observatory.scheduler.command.status",
+                "observatory.scheduler.command.stop_scheduling",
             ],
         ),
     ]
