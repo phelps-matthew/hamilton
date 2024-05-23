@@ -52,12 +52,12 @@ class AsyncMessageNode(IMessageNodeOperations):
 
     async def stop(self):
         """Stops the consumer and publisher asynchronously."""
-        await self.consumer.stop()
-        await self.producer.stop()
-        logger.info("Stopped the consumer and publisher asynchronously.")
         logger.info("Invoking shutdown hooks...")
         for hook in self.shutdown_hooks:
             await hook()
+        await self.consumer.stop()
+        await self.producer.stop()
+        logger.info("Stopped the consumer and publisher asynchronously.")
         logger.info(f"{self.config.name} shutdown complete.")
 
     async def publish_message(self, routing_key: str, message: Message, corr_id: Optional[str] = None):
