@@ -24,12 +24,14 @@ class SignalProcessorCommandHandler(MessageHandler):
         parameters = message["payload"]["parameters"]
 
         if command == "generate_psds":
-            telemetry_type = None
+            telemetry_type = "status"
             await self.signal_processor.plot_psds(**parameters)
+            response = {"psd_status": "complete"}
 
         elif command == "generate_spectrograms":
-            telemetry_type = None
+            telemetry_type = "status"
             await self.signal_processor.plot_spectrograms(*parameters)
+            response = {"spectrogram_status": "complete"}
 
         if telemetry_type is not None:
             routing_key = f"{self.routing_key_base}.{telemetry_type}"

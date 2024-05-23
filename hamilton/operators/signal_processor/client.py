@@ -35,11 +35,11 @@ class SignalProcessorClient(AsyncMessageNodeOperator):
 
     async def generate_psds(self, parameters: dict = {}):
         command = "generate_psds"
-        return await self._publish_command(command, parameters, rpc=False)
+        return await self._publish_command(command, parameters, rpc=True, timeout=180)
 
     async def generate_spectrograms(self, parameters: dict = {}):
         command = "generate_spectrograms"
-        return await self._publish_command(command, parameters, rpc=False)
+        return await self._publish_command(command, parameters, rpc=True, timeout=180)
 
 shutdown_event = asyncio.Event()
 
@@ -60,9 +60,11 @@ async def main():
     try:
         await client.start()
         print("Generating PSDS")
-        await client.generate_psds()
+        response = await client.generate_psds()
+        print(response)
         print("Generating Spectrograms")
-        await client.generate_spectrograms()
+        response = await client.generate_spectrograms()
+        print(response)
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
