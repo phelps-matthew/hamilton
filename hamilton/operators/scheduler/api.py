@@ -19,6 +19,7 @@ class Scheduler:
             logger.error(f"An error occurred while initializing Scheduler: {e}")
         self.client_list = [self.task_generator, self.orchestrator, self.astrodynamics]
         self.last_dispatched_task = None
+        self.current_task = None
         self.is_running = False
         self.dispatch_buffer = timedelta(minutes=6)
         self.queue_length = 10
@@ -38,8 +39,9 @@ class Scheduler:
                 logger.error(f"An error occurred while starting {client}: {e}")
         orchestrator_status = await self.orchestrator.status()
         logger.info(f"Orchestrator status: {orchestrator_status}")
-        await self.set_orchestrator_status_event(**orchestrator_status)
-        logger.info(f"Orchestrator status event is set: {self.orchestrator_is_ready.is_set()}")
+        if orchestrator_status is not None:
+            await self.set_orchestrator_status_event(**orchestrator_status)
+            logger.info(f"Orchestrator status event is set: {self.orchestrator_is_ready.is_set()}")
         await self.set_mode("inactive")
 
     async def stop(self):
@@ -59,11 +61,13 @@ class Scheduler:
     async def status(self) -> dict:
         queue_list = [self.format_task_details(task) for task in self.task_queue._queue]
         last_dispatched_task = self.format_task_details(self.last_dispatched_task)
+        current_task = self.format_task_details(self.current_task)
         return {
             "mode": self.current_mode,
             "is_running": self.is_running,
             "queue": queue_list,
             "last_dispatched_task": last_dispatched_task,
+            "current_task": current_task,
         }
 
     async def set_orchestrator_status_event(self, status: str):
@@ -78,8 +82,8 @@ class Scheduler:
         task_details = {}
         if task:
             task_details["sat_id"] = task["parameters"]["sat_id"]
-            task_details["aos"] = utc_to_local(task["parameters"]["aos"]["time"])
-            task_details["los"] = utc_to_local(task["parameters"]["los"]["time"])
+            task_details["aos"] = utc_to_local(task["parameters"]["aos"]["time"]).isoformat()
+            task_details["los"] = utc_to_local(task["parameters"]["los"]["time"]).isoformat()
         return task_details
 
     async def retrieve_tasks_from_db(self, start_time: datetime = None, end_time: datetime = None) -> list[Task]:
@@ -131,14 +135,10 @@ class Scheduler:
                 if self.task_queue.full():
                     break
         logger.info(f"Queue length: {self.task_queue.qsize()}")
-        for task in self.task_queue._queue:
-            aos = task["parameters"]["aos"]["time"].isoformat()
-            los = task["parameters"]["los"]["time"].isoformat()
-            logger.info(f"aos: {aos}, los: {los}")
 
     async def dispatch_task_from_queue(self, task) -> None:
         """Dispatch the next task from the queue to the orchestrator."""
-        # await self.orchestrator.orchestrate(task)
+        await self.orchestrator.orchestrate(task)
         self.last_dispatched_task = task
 
     async def wait_until_first_completed(self, events: list[asyncio.Event], coroutines: list = None):
@@ -170,6 +170,8 @@ class Scheduler:
         """Run survey mode to continuously enqueue and dispatch tasks."""
         logger.info("Running survey mode.")
         while self.current_mode == "survey" and not self.shutdown_event.is_set():
+
+            # Enqueue tasks once the orchestrator is free
             logger.info("Waiting for orchestrator to be idle..")
             await self.wait_until_first_completed(
                 [self.orchestrator_is_ready, self.mode_change_event, self.shutdown_event]
@@ -178,13 +180,13 @@ class Scheduler:
                 break
             logger.info("Enqueuing new tasks..")
             await self.enqueue_tasks()
-            next_async_task = await self.wait_until_first_completed(
-                [self.mode_change_event, self.shutdown_event], [self.task_queue.get()]
-            )
-            if self.current_mode != "survey" or self.shutdown_event.is_set():
-                break
-            next_task = next_async_task.result()
-            sleep_time = (next_task["parameters"]["aos"]["time"] - datetime.now(timezone.utc)).total_seconds()
+
+            # Get the next task from the queue
+            self.current_task = await self.task_queue.get()
+            logger.info(f"Next task: {self.format_task_details(self.current_task)}")
+
+            # Sleep until AOS (minus slew time) of next task. If orchestrator finishes first, break the sleep.
+            sleep_time = (self.current_task["parameters"]["aos"]["time"] - datetime.now(timezone.utc)).total_seconds()
             sleep_time -= 60  # time to slew to AOS
             if sleep_time > 0:
                 logger.info(f"Sleeping until (AOS - 60s) for {sleep_time} seconds..")
@@ -193,8 +195,11 @@ class Scheduler:
                 )
             if self.current_mode != "survey" or self.shutdown_event.is_set():
                 break
+
+            # Dispatch task to the orchestrator
             logger.info("Dispatching task from queue.")
-            await self.dispatch_task_from_queue(next_task)
+            await self.dispatch_task_from_queue(self.current_task)
+            await asyncio.sleep(3)  # buffer for orchestrator to send out status event
 
     async def run_standby(self):
         """Run standby mode to dispatch manually inserted tasks."""
