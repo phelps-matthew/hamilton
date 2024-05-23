@@ -86,6 +86,12 @@ class Scheduler:
             task_details["los"] = utc_to_local(task["parameters"]["los"]["time"]).isoformat()
         return task_details
 
+    async def clear_queue(self):
+        while not self.task_queue.empty():
+            await self.task_queue.get()
+            self.task_queue.task_done()
+        
+
     async def retrieve_tasks_from_db(self, start_time: datetime = None, end_time: datetime = None) -> list[Task]:
         """Retrieve satellite records with AOS between `start_time` and `end_time`, ascending in AOS."""
         if start_time is None:
@@ -157,6 +163,7 @@ class Scheduler:
         self.current_mode = mode
         self.mode_change_event.set()  # Signal mode change
         self.mode_change_event.clear()  # Reset the event for future use
+        await self.clear_queue()
         if mode == "survey":
             await self.run_survey()
         elif mode == "standby":
@@ -200,7 +207,8 @@ class Scheduler:
             logger.info("Dispatching task from queue.")
             await self.dispatch_task_from_queue(self.current_task)
             await asyncio.sleep(3)  # buffer for orchestrator to send out status event
-
+    
+    # TODO: Needs some review, referencing run_survey
     async def run_standby(self):
         """Run standby mode to dispatch manually inserted tasks."""
         logger.info("Running standby mode.")
