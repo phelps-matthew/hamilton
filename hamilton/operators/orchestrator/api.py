@@ -42,7 +42,12 @@ class Orchestrator:
         telemetry_type = "status_event"
         routing_key = f"{routing_key_base}.{telemetry_type}"
         telemetry_msg = self.node_operations.msg_generator.generate_telemetry(telemetry_type, message)
-        await self.node_operations.publish_message(routing_key, telemetry_msg)
+        try: 
+            await asyncio.wait_for(self.node_operations.publish_message(routing_key, telemetry_msg), timeout=10.0)
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout occurred while publishing status event.")
+        except Exception as e:
+            logger.error(f"An error occurred while publishing status event: {e}")
 
     async def start(self):
         logger.info("Starting Orchestrator.")
@@ -57,9 +62,11 @@ class Orchestrator:
         await self.stop_orchestrating()
         for client in self.client_list:
             try:
-                await client.stop()
+                await asyncio.wait_for(client.stop(), timeout=30.0)
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout occurred while stopping {client}.")
             except Exception as e:
-                logger.error(f"An error occured while stopping {client}: {e}")
+                logger.error(f"An error occurred while stopping {client}: {e}")
 
     async def stop_orchestrating(self):
         """Stop the orchestration loop and reset orchestration status."""
