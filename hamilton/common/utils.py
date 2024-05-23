@@ -2,7 +2,7 @@ import json
 import numpy as np
 from datetime import datetime
 from bson import ObjectId
-import json
+import pytz
 
 
 class CustomJSONEncoder(json.JSONEncoder):
@@ -33,6 +33,12 @@ class CustomJSONDecoder(json.JSONDecoder):
                 except ValueError:
                     pass
         return dct
+
+def utc_to_local(utc_dt):
+    return utc_dt.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone("HST"))
+
+def local_to_utc(local_dt):
+    return local_dt.replace(tzinfo=pytz.timezone("HST")).astimezone(pytz.UTC)
 
 
 if __name__ == "__main__":
