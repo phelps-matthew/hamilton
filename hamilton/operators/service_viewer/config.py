@@ -30,6 +30,7 @@ class ServiceViewerControllerConfig(MessageNodeConfig):
         "hamilton-tracker",
         "hamilton-orchestrator",
         "hamilton-signal-processor",
+        "hamilton-scheduler",
     ]
 
     UPDATE_INTERVAL = 60 * 5 # seconds

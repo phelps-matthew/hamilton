@@ -14,6 +14,7 @@ class LogCollectorConfig(LogConfig):
         Exchange(name="tracker", type="topic", durable=True, auto_delete=False),
         Exchange(name="orchestrator", type="topic", durable=True, auto_delete=False),
         Exchange(name="signal_processor", type="topic", durable=True, auto_delete=False),
+        Exchange(name="scheduler", type="topic", durable=True, auto_delete=False),
     ]
     bindings = [
         Binding(exchange="mount", routing_keys=["#"]),
@@ -26,4 +27,5 @@ class LogCollectorConfig(LogConfig):
         Binding(exchange="tracker", routing_keys=["#"]),
         Binding(exchange="orchestrator", routing_keys=["#"]),
         Binding(exchange="signal_processor", routing_keys=["#"]),
+        Binding(exchange="scheduler", routing_keys=["#"]),
     ]
