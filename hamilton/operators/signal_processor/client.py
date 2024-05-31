@@ -35,11 +35,11 @@ class SignalProcessorClient(AsyncMessageNodeOperator):
 
     async def generate_psds(self, parameters: dict = {}):
         command = "generate_psds"
-        return await self._publish_command(command, parameters, rpc=True, timeout=180)
+        return await self._publish_command(command, parameters, rpc=True, timeout=120)
 
     async def generate_spectrograms(self, parameters: dict = {}):
         command = "generate_spectrograms"
-        return await self._publish_command(command, parameters, rpc=True, timeout=180)
+        return await self._publish_command(command, parameters, rpc=True, timeout=240)
 
 shutdown_event = asyncio.Event()
 
