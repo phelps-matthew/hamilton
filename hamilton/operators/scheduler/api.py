@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from hamilton.base.task import Task, TaskGenerator
 from hamilton.operators.orchestrator.client import OrchestratorClient
 from hamilton.operators.astrodynamics.client import AstrodynamicsClient
-from hamilton.common.utils import utc_to_local
+from hamilton.common.utils import utc_to_local, wait_until_first_completed
 
 logger = logging.getLogger(__name__)
 
@@ -21,15 +21,19 @@ class Scheduler:
         self.last_dispatched_task = None
         self.current_task = None
         self.is_running = False
-        self.dispatch_buffer = timedelta(minutes=6)
-        self.queue_length = 10
         self.task_queue: asyncio.Queue = asyncio.Queue(maxsize=self.queue_length)
         self.shutdown_event: asyncio.Event = shutdown_event
         self.orchestrator_is_ready = asyncio.Event()
         self.current_mode = None
         self.mode_change_event = asyncio.Event()
+        self.collect_request_queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
+        self.new_task_event = asyncio.Event()
+
+        self.dispatch_buffer = timedelta(minutes=6)
+        self.queue_length = 10
 
     async def start(self):
+        """Start the scheduler and its clients."""
         logger.info("Starting Scheduler.")
         self.is_running = True
         for client in self.client_list:
@@ -45,6 +49,7 @@ class Scheduler:
         await self.set_mode("inactive")
 
     async def stop(self):
+        """Stop the scheduler and its clients."""
         logger.info("Stopping Scheduler.")
         await self.stop_scheduling()
         for client in self.client_list:
@@ -53,12 +58,8 @@ class Scheduler:
             except Exception as e:
                 logger.error(f"An error occurred while stopping {client}: {e}")
 
-    async def stop_scheduling(self):
-        self.is_running = False
-        self.shutdown_event.set()
-        logger.info("Scheduling loop stopped.")
-
     async def status(self) -> dict:
+        """Get the current status of the scheduler."""
         queue_list = [self.format_task_details(task) for task in self.task_queue._queue]
         last_dispatched_task = self.format_task_details(self.last_dispatched_task)
         current_task = self.format_task_details(self.current_task)
@@ -70,49 +71,13 @@ class Scheduler:
             "current_task": current_task,
         }
 
-    async def set_orchestrator_status_event(self, status: str):
-        if status == "idle":
-            self.orchestrator_is_ready.set()
-            logger.info("Orchestrator ready event set.")
-        elif status == "active":
-            self.orchestrator_is_ready.clear()
-            logger.info("Orchestrator read event cleared.")
+    async def stop_scheduling(self):
+        """Stop the scheduling loop."""
+        self.is_running = False
+        self.shutdown_event.set()
+        logger.info("Scheduling loop stopped.")
 
-    def format_task_details(self, task) -> dict:
-        task_details = {}
-        if task:
-            task_details["sat_id"] = task["parameters"]["sat_id"]
-            task_details["aos"] = utc_to_local(task["parameters"]["aos"]["time"]).isoformat()
-            task_details["los"] = utc_to_local(task["parameters"]["los"]["time"]).isoformat()
-        return task_details
-
-    async def clear_queue(self):
-        while not self.task_queue.empty():
-            await self.task_queue.get()
-            self.task_queue.task_done()
-        
-
-    async def retrieve_tasks_from_db(self, start_time: datetime = None, end_time: datetime = None) -> list[Task]:
-        """Retrieve satellite records with AOS between `start_time` and `end_time`, ascending in AOS."""
-        if start_time is None:
-            start_time = datetime.now(timezone.utc)
-        if end_time is None:
-            end_time = datetime.now(timezone.utc) + timedelta(hours=1)
-        sats_aos_los = await self.astrodynamics.get_all_aos_los(start_time, end_time)
-        task_list = []
-        for sat_id, aos, los in sats_aos_los:
-            task = await self.task_generator.generate_task(sat_id)
-            if task is not None:
-                task_list.append(task)
-
-        logger.info(f"Tasks retrieved: {len(task_list)}")
-        return task_list
-
-    async def enqueue_task_manual(self, task: Task):
-        """Force insert a specific task into the queue, such as that received from a CollectRequest."""
-        await self.task_queue.put(task)
-
-    async def enqueue_tasks(self):
+    async def enqueue_tasks_survey(self):
         """Enqueue tasks, respecting dispatch buffer time and AOS/LOS overlap."""
         if self.task_queue.full():
             return
@@ -129,7 +94,7 @@ class Scheduler:
             start_time = last_task["parameters"]["los"]["time"] + self.dispatch_buffer
 
         end_time = start_time + timedelta(hours=4)
-        tasks = await self.retrieve_tasks_from_db(start_time=start_time, end_time=end_time)
+        tasks = await self.retrieve_tasks_from_astrodynamics(start_time=start_time, end_time=end_time)
         for task in tasks:
             aos = task["parameters"]["aos"]["time"]
             los = task["parameters"]["los"]["time"]
@@ -142,34 +107,55 @@ class Scheduler:
                     break
         logger.info(f"Queue length: {self.task_queue.qsize()}")
 
-    async def dispatch_task_from_queue(self, task) -> None:
+    async def enqueue_collect_request_task(self, task: Task):
+        """Enqueue a specific task into the collect request queue."""
+        await self.collect_request_queue.put((task["parameters"]["aos"]["time"], task))
+        await self.sort_collect_request_queue()
+        self.new_task_event.set()
+
+    async def sort_collect_request_queue(self):
+        """Validate tasks in the priority queue and ensure enough break time between tasks and that AOS is in the future."""
+        current_time_plus_60 = datetime.now(timezone.utc) + timedelta(seconds=60)
+        tasks = []
+        while not self.collect_request_queue.empty():
+            tasks.append(await self.collect_request_queue.get())
+
+        # Sort tasks based on AOS time
+        tasks.sort(key=lambda x: x[0])
+
+        # Validate tasks
+        valid_tasks = []
+        for i in range(len(tasks)):
+            task_aos_time = tasks[i][1]["parameters"]["aos"]["time"]
+            if (i == 0 or (task_aos_time - tasks[i - 1][1]["parameters"]["los"]["time"]) >= self.dispatch_buffer) and (
+                task_aos_time > current_time_plus_60
+            ):
+                valid_tasks.append(tasks[i])
+            else:
+                await self.send_rejected_collect_response(tasks[i][1])
+
+        # Reinsert valid tasks into the priority queue
+        for task in valid_tasks:
+            await self.collect_request_queue.put(task)
+
+    async def dispatch_task_to_orchestrator(self, task) -> None:
         """Dispatch the next task from the queue to the orchestrator."""
         await self.orchestrator.orchestrate(task)
         self.last_dispatched_task = task
-
-    async def wait_until_first_completed(self, events: list[asyncio.Event], coroutines: list = None):
-        """Wait until the first event or coroutine in the list is completed and return the completed task."""
-        if coroutines is None:
-            coroutines = []
-        event_tasks = [asyncio.create_task(event.wait()) for event in events]
-        coroutine_tasks = [asyncio.create_task(coro) for coro in coroutines]
-        done, pending = await asyncio.wait(event_tasks + coroutine_tasks, return_when=asyncio.FIRST_COMPLETED)
-        for task in pending:
-            task.cancel()
-        return done.pop()
 
     async def set_mode(self, mode: str = "survey") -> None:
         """Switch between different modes of operation."""
         self.current_mode = mode
         self.mode_change_event.set()  # Signal mode change
         self.mode_change_event.clear()  # Reset the event for future use
-        await self.clear_queue()
         if mode == "survey":
+            await self.clear_queue()
             await self.run_survey()
-        elif mode == "standby":
-            await self.run_standby()
         elif mode == "inactive":
             await self.run_inactive()
+        elif mode == "collect_request":
+            await self.sort_collect_request_queue()
+            await self.run_collect_request()
         else:
             logger.error(f"Unknown mode: {mode}")
 
@@ -184,9 +170,9 @@ class Scheduler:
                 [self.orchestrator_is_ready, self.mode_change_event, self.shutdown_event]
             )
             if self.current_mode != "survey" or self.shutdown_event.is_set():
-                break
+                return
             logger.info("Enqueuing new tasks..")
-            await self.enqueue_tasks()
+            await self.enqueue_tasks_survey()
 
             # Get the next task from the queue
             self.current_task = await self.task_queue.get()
@@ -197,48 +183,107 @@ class Scheduler:
             sleep_time -= 60  # time to slew to AOS
             if sleep_time > 0:
                 logger.info(f"Sleeping until (AOS - 60s) for {sleep_time} seconds..")
-                await self.wait_until_first_completed(
+                await wait_until_first_completed(
                     [self.mode_change_event, self.shutdown_event], [asyncio.sleep(sleep_time)]
                 )
             if self.current_mode != "survey" or self.shutdown_event.is_set():
-                break
+                return
 
             # Dispatch task to the orchestrator
             logger.info("Dispatching task from queue.")
-            await self.dispatch_task_from_queue(self.current_task)
+            await self.dispatch_task_to_orchestrator(self.current_task)
             await asyncio.sleep(3)  # buffer for orchestrator to send out status event
-    
-    # TODO: Needs some review, referencing run_survey
-    async def run_standby(self):
-        """Run standby mode to dispatch manually inserted tasks."""
-        logger.info("Running standby mode.")
-        while self.current_mode == "standby" and not self.shutdown_event.is_set():
-            logger.info("Waiting for orchestrator to be idle..")
-            await self.wait_until_first_completed(
-                [self.orchestrator_is_ready, self.mode_change_event, self.shutdown_event]
-            )
-            if self.current_mode != "standby" or self.shutdown_event.is_set():
-                break
-            logger.info("Waiting for non-empty queue..")
-            next_async_task = await self.wait_until_first_completed(
-                [self.mode_change_event, self.shutdown_event], [self.task_queue.get()]
-            )
-            next_task = next_async_task.result()
-            if self.current_mode != "standby" or self.shutdown_event.is_set():
-                break
-            sleep_time = (next_task["parameters"]["aos"]["time"] - datetime.now(timezone.utc)).total_seconds()
-            sleep_time -= 60  # time to slew to AOS
-            if sleep_time > 0:
-                logger.info(f"Sleeping until (AOS - 60s) for {sleep_time} seconds..")
-                await self.wait_until_first_completed(
-                    [self.mode_change_event, self.shutdown_event], [asyncio.sleep(sleep_time)]
+
+    async def run_collect_request(self):
+        """Run collect request mode to dispatch tasks based on their AOS times."""
+        logger.info("Running collect request mode.")
+        while self.current_mode == "collect_request" and not self.shutdown_event.is_set():
+            if self.collect_request_queue.empty():
+                await wait_until_first_completed([self.new_task_event, self.shutdown_event, self.mode_change_event])
+                self.new_task_event.clear()
+                if self.shutdown_event.is_set() or self.current_mode != "collect_request":
+                    return
+                continue
+
+            next_task = self.collect_request_queue._queue[0]  # Peek at the next task
+            self.current_task = next_task[1]
+            sleep_time = (
+                self.current_task["parameters"]["aos"]["time"] - datetime.now(timezone.utc)
+            ).total_seconds() - 60
+
+            while sleep_time > 0:
+                await wait_until_first_completed(
+                    [self.new_task_event, self.shutdown_event, self.mode_change_event], [asyncio.sleep(sleep_time)]
                 )
-            if self.current_mode != "standby" or self.shutdown_event.is_set():
-                break
+                if self.shutdown_event.is_set() or self.current_mode != "collect_request":
+                    return
+                if self.new_task_event.is_set():
+                    self.new_task_event.clear()
+                    next_task = self.collect_request_queue._queue[0]  # Peek at the next task
+                    self.current_task = next_task[1]
+                    sleep_time = (
+                        self.current_task["parameters"]["aos"]["time"] - datetime.now(timezone.utc)
+                    ).total_seconds() - 60
+                else:
+                    break
+
+            if self.shutdown_event.is_set() or self.current_mode != "collect_request":
+                return
+
+            # Now pop the task from the queue and dispatch it
+            next_task = await self.collect_request_queue.get()
+            self.current_task = next_task[1]
             logger.info("Dispatching task from queue.")
-            await self.dispatch_task_from_queue(next_task)
+            await self.dispatch_task_to_orchestrator(self.current_task)
+            await asyncio.sleep(3)  # buffer for orchestrator to send out status event
 
     async def run_inactive(self):
         """Deactivate all scheduling."""
         logger.info("Running inactive mode. No tasks will be dispatched.")
-        await self.wait_until_first_completed([self.shutdown_event, self.mode_change_event])
+        await wait_until_first_completed([self.shutdown_event, self.mode_change_event])
+
+    async def retrieve_tasks_from_astrodynamics(
+        self, start_time: datetime = None, end_time: datetime = None
+    ) -> list[Task]:
+        """Retrieve satellite records with AOS between `start_time` and `end_time`, ascending in AOS."""
+        if start_time is None:
+            start_time = datetime.now(timezone.utc)
+        if end_time is None:
+            end_time = datetime.now(timezone.utc) + timedelta(hours=1)
+        sats_aos_los = await self.astrodynamics.get_all_aos_los(start_time, end_time)
+        task_list = []
+        for sat_id, aos, los in sats_aos_los:
+            task = await self.task_generator.generate_task(sat_id)
+            if task is not None:
+                task_list.append(task)
+
+        logger.info(f"Tasks retrieved: {len(task_list)}")
+        return task_list
+
+    async def set_orchestrator_status_event(self, status: str):
+        """Set the orchestrator status event based on the provided status."""
+        if status == "idle":
+            self.orchestrator_is_ready.set()
+            logger.info("Orchestrator ready event set.")
+        elif status == "active":
+            self.orchestrator_is_ready.clear()
+            logger.info("Orchestrator read event cleared.")
+
+    def format_task_details(self, task) -> dict:
+        """Format task details for logging and status reporting."""
+        task_details = {}
+        if task:
+            task_details["sat_id"] = task["parameters"]["sat_id"]
+            task_details["aos"] = utc_to_local(task["parameters"]["aos"]["time"]).isoformat()
+            task_details["los"] = utc_to_local(task["parameters"]["los"]["time"]).isoformat()
+        return task_details
+
+    async def clear_queue(self):
+        """Clear the task queue."""
+        while not self.task_queue.empty():
+            await self.task_queue.get()
+
+    async def send_rejected_collect_response(self, task: Task):
+        """Send a rejected collect request response"""
+        logger.info(f"Sending rejected collect request response: {self.format_task_details(task)}")
+        # TODO: add collect response client

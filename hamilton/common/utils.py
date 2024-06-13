@@ -1,4 +1,5 @@
 import json
+import asyncio
 import numpy as np
 from datetime import datetime
 from bson import ObjectId
@@ -39,6 +40,17 @@ def utc_to_local(utc_dt):
 
 def local_to_utc(local_dt):
     return local_dt.replace(tzinfo=pytz.timezone("HST")).astimezone(pytz.UTC)
+
+async def wait_until_first_completed(events: list[asyncio.Event], coroutines: list = None):
+        """Wait until the first event or coroutine in the list is completed and return the completed task."""
+        if coroutines is None:
+            coroutines = []
+        event_tasks = [asyncio.create_task(event.wait()) for event in events]
+        coroutine_tasks = [asyncio.create_task(coro) for coro in coroutines]
+        done, pending = await asyncio.wait(event_tasks + coroutine_tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in pending:
+            task.cancel()
+        return done.pop()
 
 
 if __name__ == "__main__":
