@@ -1,21 +1,15 @@
-"""
-hamilton-scheduler enqueue --sat_id xxx --preempt
-"""
-
 import asyncio
 import signal
 from typing import Optional
-import json
 
 from hamilton.base.messages import MessageHandlerType, Message
-from hamilton.operators.scheduler.config import SchedulerClientConfig
+from hamilton.operators.sensor_capsule.config import SensorCapsuleClientConfig
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.messaging.interfaces import MessageHandler
 from hamilton.base.task import Task
-from hamilton.common.utils import CustomJSONEncoder
 
 
-class OrchestratorTelemetryHandler(MessageHandler):
+class SensorCapsuleTelemetryHandler(MessageHandler):
     def __init__(self):
         super().__init__(MessageHandlerType.TELEMETRY)
 
@@ -23,13 +17,13 @@ class OrchestratorTelemetryHandler(MessageHandler):
         return message["payload"]["parameters"]
 
 
-class SchedulerClient(AsyncMessageNodeOperator):
-    def __init__(self, config: SchedulerClientConfig = None, shutdown_event: asyncio.Event = None):
+class SensorCapsuleClient(AsyncMessageNodeOperator):
+    def __init__(self, config: SensorCapsuleClientConfig = None, shutdown_event: asyncio.Event = None):
         if config is None:
-            config = SchedulerClientConfig()
-        handlers = [OrchestratorTelemetryHandler()]
+            config = SensorCapsuleClientConfig()
+        handlers = [SensorCapsuleTelemetryHandler()]
         super().__init__(config, handlers, shutdown_event)
-        self.routing_key_base = "observatory.scheduler.command"
+        self.routing_key_base = "observatory.sensor_capsule.command"
 
     async def _publish_command(self, command: str, parameters: dict, rpc: bool = True) -> dict:
         routing_key = f"{self.routing_key_base}.{command}"
@@ -40,29 +34,15 @@ class SchedulerClient(AsyncMessageNodeOperator):
             response = await self.publish_message(routing_key, message)
         return response
 
-    async def stop_scheduling(self):
-        command = "stop_scheduling"
-        parameters = {}
-        return await self._publish_command(command, parameters, rpc=False)
-
-    async def set_mode(self, mode: str):
-        """
-        Args: mode: [survey, standby, inactive]
-        """
-        command = "set_mode"
-        parameters = {"mode": mode}
+    async def post_collect_response(self, task: Task):
+        command = "post_collect_response"
+        parameters = task
         return await self._publish_command(command, parameters, rpc=False)
 
     async def status(self):
         command = "status"
         parameters = {}
-        return await self._publish_command(command, parameters, rpc=True)
-
-    async def enqueue_collect_request(self, task: Task):
-        """Enqueue a collect request to the scheduler."""
-        command = "enqueue_collect_request"
-        parameters = {"task": task}
-        return await self._publish_command(command, parameters, rpc=False)
+        return await self._publish_command(command, parameters)
 
 
 shutdown_event = asyncio.Event()
@@ -79,18 +59,15 @@ async def main():
         loop.add_signal_handler(getattr(signal, signame), signal_handler)
 
     # Application setup
-    client = SchedulerClient(shutdown_event=shutdown_event)
+    client = SensorCapsuleClient(shutdown_event=shutdown_event)
 
     try:
         await client.start()
 
         response = await client.status()
-        json.dumps(response, indent=4, cls=CustomJSONEncoder)
-
-        response = await client.set_mode("inactive")
         print(response)
 
-        response = await client.set_mode("standby")
+        response = await client.post_collect_response({"sat_id": "25397"})
         print(response)
 
     except Exception as e:
@@ -102,5 +79,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
