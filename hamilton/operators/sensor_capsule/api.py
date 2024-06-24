@@ -6,18 +6,20 @@
 """
 
 import asyncio
+from datetime import datetime, timezone
 import json
 import logging
-import requests
-from hamilton.base.task import Task, TaskGenerator
+import aiohttp
 from hamilton.operators.scheduler.client import SchedulerClient
-from hamilton.operators.sensor_capsule.config import SensorCapsuleConfig
+from hamilton.operators.sensor_capsule.config import SensorCapsuleControllerConfig
+from hamilton.base.task import Task, TaskGenerator
+from hamilton.common.utils import wait_until_first_completed, CustomJSONEncoder
 
 logger = logging.getLogger(__name__)
 
 
 class SensorCapsule:
-    def __init__(self, config: SensorCapsuleConfig, shutdown_event: asyncio.Event = None):
+    def __init__(self, config: SensorCapsuleControllerConfig, shutdown_event: asyncio.Event = None):
         try:
             self.task_generator: TaskGenerator = TaskGenerator()
             self.scheduler: SchedulerClient = SchedulerClient()
@@ -58,26 +60,28 @@ class SensorCapsule:
         }
 
     async def http_request(self, method, url, data=None):
-        """Helper function to handle HTTP requests."""
-        try:
-            if method == "GET":
-                response = requests.get(url, cert=(self.config.cert, self.config.key), verify=False)
-            elif method == "POST":
-                headers = {"Content-Type": "application/json"}
-                response = requests.post(
-                    url, json=data, cert=(self.config.cert, self.config.key), verify=False, headers=headers
-                )
-            response.raise_for_status()  # Raises an HTTPError for bad responses
-            return response.json()  # Assuming the response is JSON
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTP error occurred: {e} - Status code: {response.status_code}")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error connecting to {url}: {e}")
-        except json.JSONDecodeError:
-            logger.error(f"Failed to decode JSON from the response: {response.text}")
-        except Exception as e:
-            logger.error(f"An unexpected error occurred: {e}")
-        return None
+        """Helper function to handle HTTP requests asynchronously."""
+        headers = {"Content-Type": "application/json"} if method == "POST" else {}
+        timeout = aiohttp.ClientTimeout(total=5)  # Set a timeout for the request
+        async with aiohttp.ClientSession() as session:
+            try:
+                if method == "GET":
+                    async with session.get(url, ssl=False, timeout=timeout) as response:
+                        response.raise_for_status()  # Raises an HTTPError for bad responses
+                        return await response.json()  # Assuming the response is JSON
+                elif method == "POST":
+                    async with session.post(url, json=data, headers=headers, ssl=False, timeout=timeout) as response:
+                        response.raise_for_status()
+                        return await response.json()
+            except aiohttp.ClientResponseError as e:
+                logger.error(f"HTTP error occurred: {e} - Status code: {response.status}")
+            except aiohttp.ClientError as e:
+                logger.error(f"Error connecting to {url}: {e}")
+            except json.JSONDecodeError:
+                logger.error(f"Failed to decode JSON from the response: {await response.text()}")
+            except Exception as e:
+                logger.error(f"An unexpected error occurred: {e}")
+            return None
 
     async def get_bolt_collect_request(self):
         """Poll the Bolt service for a single collect request."""
@@ -112,27 +116,25 @@ class SensorCapsule:
 
     async def poll_bolt_collect_request(self):
         """Periodically poll the Bolt service for collect requests, transform them, and send to scheduler."""
-        while True:
-            await asyncio.sleep(self.config.bolt_poll_interval)
+        while not self.shutdown_event.is_set():
             response = await self.get_bolt_collect_request()
             if response:
                 if response["request"] is not None:
                     collect_request = response["request"]
                     timestamp = response["timestamp"]
                     # transform to Task
-                    task = await self.transform_bolt_collect_request_to_task(collect_request)
+                    task = await self.transform_collect_request_to_task(collect_request)
                     # send to scheduler
-                    await self.scheduler.enqueue_collect_request(task)
-
-    # TODO: Add start time modifier to task generator
-    async def transform_collect_request_to_task(self, collect_request: dict) -> Task:
-        """Transform a collect request to a Task."""
-        sat_id = collect_request["satNo"]
-        task = self.task_generator(sat_id)
-        return task
+                    # await self.scheduler.enqueue_collect_request(task)
+                    await wait_until_first_completed([self.shutdown_event], [asyncio.sleep(5)])
+                    continue
+            await wait_until_first_completed([self.shutdown_event], [asyncio.sleep(self.config.bolt_poll_interval)])
 
     async def transform_collect_request_to_task(self, collect_request: dict) -> Task:
         """Transform a collect request to a Task."""
         sat_id = collect_request["satNo"]
-        task = self.task_generator(sat_id)
+        start_time = collect_request["startTime"]
+        start_time = datetime.now(tz=timezone.utc)
+        task = await self.task_generator.generate_task(sat_id=sat_id, start_time=start_time)
+        logger.info(f"Generated task: {json.dumps(task, indent=4, cls=CustomJSONEncoder)}")
         return task

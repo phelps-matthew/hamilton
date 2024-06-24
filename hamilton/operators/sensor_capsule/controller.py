@@ -68,6 +68,7 @@ async def main():
 
     try:
         await controller.start()
+        await controller.sensor_capsule.poll_bolt_collect_request()
         await shutdown_event.wait()  # Wait for the shutdown signal
 
     except Exception as e:

@@ -21,11 +21,11 @@ class SensorCapsuleControllerConfig(MessageNodeConfig):
     ]
 
     bolt_ip: str = "localhost"
-    bolt_port: int = 8080
+    bolt_port: int = 5140
     bolt_route: str = "/bolt/collectrequest"
-    bolt_poll_interval: int = 60  # seconds
+    bolt_poll_interval: int = 5  # seconds
     spout_ip: str = "localhost"
-    spout_port: int = 8081
+    spout_port: int = 5132
     spout_route: str = "/spout/json"
     key: Path = Path("~/hamilton/sensor-capsule/certs/key.pem")
     cert: Path = Path("~/hamilton/sensor-capsule/certs/cert.pem")
