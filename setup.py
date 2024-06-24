@@ -15,6 +15,7 @@ setuptools.setup(
         "pytest-asyncio",
         "sigmf",
         "aio-pika",
+        "aiohttp",
     ]
 )
 
