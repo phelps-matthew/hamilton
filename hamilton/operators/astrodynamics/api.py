@@ -128,7 +128,8 @@ class SpaceObjectTracker:
         full_event_map = None
         async with acquire_lock(self._lock):
             try:
-                if sat_id in self.aos_los:
+                # If no target time is passed, then safe to reference cached AOS/LOS
+                if sat_id in self.aos_los and time is None:
                     return self.aos_los[sat_id]
 
                 # offset from `time` by which to compute next AOS and LOS
@@ -192,7 +193,8 @@ class SpaceObjectTracker:
         orbit = None
         async with acquire_lock(self._lock):
             try:
-                if sat_id in self.orbits:
+                # If no target AOS/LOS is passed, then safe to reference cached orbit
+                if sat_id in self.orbits and aos is None and los is None:
                     return self.orbits[sat_id]
 
                 # Compute AOS and LOS if not provided
