@@ -55,9 +55,13 @@ class TaskGenerator:
             except Exception as e:
                 logger.error(f"An error occurred while stopping {client}: {e}")
 
-    async def generate_task(self, sat_id: str) -> Optional[Task]:
-        aos_los = await self.astrodynamics.get_aos_los(sat_id)
-        interpolated_orbit = await self.astrodynamics.get_interpolated_orbit(sat_id)
+    async def generate_task(self, sat_id: str, start_time: Optional[datetime] = None) -> Optional[Task]:
+        aos_los = await self.astrodynamics.get_aos_los(sat_id, time=start_time)
+        if start_time:
+            aos, los = aos_los["aos"]["time"], aos_los["los"]["time"]
+        else:
+            aos, los = None, None
+        interpolated_orbit = await self.astrodynamics.get_interpolated_orbit(sat_id, aos, los)
         downlink_freqs = await self.radiometrics.get_downlink_freqs(sat_id)
         if downlink_freqs:
             freq = downlink_freqs[0]
@@ -78,6 +82,7 @@ class TaskGenerator:
                 "los": aos_los.get("los", None),
                 "sdr": {"sat_id": sat_id, "freq": freq},
                 "interpolated_orbit": interpolated_orbit,
+                "request_start_time": start_time,
             },
         }
 
@@ -94,6 +99,7 @@ class TaskGenerator:
         try:
             aos_time = parameters["aos"]["time"]
             los_time = parameters["los"]["time"]
+            request_start_time = parameters["request_start_time"]
         except KeyError:
             return False
         current_time = datetime.now(timezone.utc)
@@ -104,6 +110,7 @@ class TaskGenerator:
             and aos_time < los_time
             and los_time > current_time
             and los_time - aos_time < timedelta(minutes=15)
+            and (request_start_time is None or request_start_time <= aos_time)
         ):
             return True
         else:
