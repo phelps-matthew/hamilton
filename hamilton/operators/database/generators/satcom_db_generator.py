@@ -306,7 +306,7 @@ class SatcomDBGenerator:
             for transmitter in tx_profile["transmitters"]:
                 freq = transmitter["downlink_low"]
                 mode = transmitter["mode"]
-                if freq is not None and mode.lower() != "cw":
+                if freq and mode and mode.lower() != "cw":
                     satnogs_downlinks.append(freq)
 
             downlinks = set(je9pel_downlinks + satnogs_downlinks)
