@@ -25,11 +25,11 @@ class SDRClient(AsyncMessageNodeOperator):
         super().__init__(config, handlers, shutdown_event)
         self.routing_key_base = "observatory.sdr.command"
 
-    async def _publish_command(self, command: str, parameters: dict, rpc: bool = True) -> dict:
+    async def _publish_command(self, command: str, parameters: dict, rpc: bool = True, timeout: int = 30) -> dict:
         routing_key = f"{self.routing_key_base}.{command}"
         message = self.msg_generator.generate_command(command, parameters)
         if rpc:
-            response = await self.publish_rpc_message(routing_key, message)
+            response = await self.publish_rpc_message(routing_key, message, timeout)
         else:
             response = await self.publish_message(routing_key, message)
         return response
@@ -41,7 +41,7 @@ class SDRClient(AsyncMessageNodeOperator):
 
     async def start_record(self, parameters: dict):
         command = "start_record"
-        return await self._publish_command(command, parameters, rpc=True)
+        return await self._publish_command(command, parameters, rpc=True, timeout=30)
 
     async def stop_record(self):
         command = "stop_record"
@@ -75,7 +75,7 @@ async def main():
         response = await client.start_record(parameters)
         print(response)
 
-        time.sleep(4)
+        time.sleep(10)
         #print(await client.status())
         #time.sleep(5)
 

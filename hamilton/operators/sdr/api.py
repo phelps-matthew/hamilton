@@ -6,7 +6,8 @@ internally handles relay control of the LNA.
 from typing import Literal
 from datetime import datetime
 from hamilton.operators.sdr.config import SDRControllerConfig
-from hamilton.operators.sdr.flowgraphs.record_sigmf import SigMFRecordFlowgraph
+#from hamilton.operators.sdr.flowgraphs.record_sigmf import SigMFRecordFlowgraph
+from hamilton.operators.sdr.flowgraphs.new_record_sigmf import SigMFRecordFlowgraph
 from hamilton.operators.relay.client import RelayClient
 from hamilton.operators.radiometrics.client import RadiometricsClient
 from hamilton.common.utils import CustomJSONEncoder
@@ -72,7 +73,7 @@ class SDRSigMFRecord:
         if self.filename is not None:
             meta_path = Path(self.filename).with_suffix(".json")
             with open(meta_path, 'w') as f:
-                logger.info(f"Writing metadata to {str(meta_path)}")
+                logger.info(f"Writing auxillary metadata to {str(meta_path)}")
                 json.dump(self.metadata, f, indent=4, cls=CustomJSONEncoder)
 
     async def set_lna(self, state: Literal["on", "off"] = "off"):
@@ -132,7 +133,7 @@ class SDRSigMFRecord:
             if self.flowgraph is not None:
                 self.flowgraph.stop()
                 self.flowgraph.wait()  # Waits for all processing to stop
-                self.overwrite_sample_rate() # sigmf has issue logging correct sample rate
+                #self.overwrite_sample_rate() # sigmf has issue logging correct sample rate
                 await self.write_metadata() # log the database metadata file as json
             self.is_recording = False
             logger.info("Flowgraph stopped")
