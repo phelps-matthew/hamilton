@@ -15,6 +15,7 @@ services=(
   "hamilton-orchestrator.service"
   "hamilton-signal-processor.service"
   "hamilton-scheduler.service"
+  "hamilton-sensor-capsule.service"
 )
 
 # The action to perform (restart, stop, status)
