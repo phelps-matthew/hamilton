@@ -21,16 +21,16 @@ class Scheduler:
         self.last_dispatched_task = None
         self.current_task = None
         self.is_running = False
-        self.task_queue: asyncio.Queue = asyncio.Queue(maxsize=self.queue_length)
         self.shutdown_event: asyncio.Event = shutdown_event
         self.orchestrator_is_ready = asyncio.Event()
         self.current_mode = None
         self.mode_change_event = asyncio.Event()
-        self.collect_request_queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
         self.new_task_event = asyncio.Event()
 
         self.dispatch_buffer = timedelta(minutes=6)
         self.queue_length = 10
+        self.task_queue: asyncio.Queue = asyncio.Queue(maxsize=self.queue_length)
+        self.collect_request_queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
 
     async def start(self):
         """Start the scheduler and its clients."""
@@ -60,13 +60,15 @@ class Scheduler:
 
     async def status(self) -> dict:
         """Get the current status of the scheduler."""
-        queue_list = [self.format_task_details(task) for task in self.task_queue._queue]
+        task_queue = [self.format_task_details(task) for task in self.task_queue._queue]
+        collect_request_queue = [self.format_task_details(cr[1]) for cr in self.collect_request_queue._queue]
         last_dispatched_task = self.format_task_details(self.last_dispatched_task)
         current_task = self.format_task_details(self.current_task)
         return {
             "mode": self.current_mode,
             "is_running": self.is_running,
-            "queue": queue_list,
+            "task_queue": task_queue,
+            "collect_request_queue": collect_request_queue,
             "last_dispatched_task": last_dispatched_task,
             "current_task": current_task,
         }
@@ -109,12 +111,14 @@ class Scheduler:
 
     async def enqueue_collect_request_task(self, task: Task):
         """Enqueue a specific task into the collect request queue."""
+        logger.info(f"Enqueueing collect request task: {task['task_id']}")
         await self.collect_request_queue.put((task["parameters"]["aos"]["time"], task))
         await self.sort_collect_request_queue()
         self.new_task_event.set()
 
     async def sort_collect_request_queue(self):
         """Validate tasks in the priority queue and ensure enough break time between tasks and that AOS is in the future."""
+        logger.info(f"Sorting collect request queue of current size: {self.collect_request_queue.qsize()}")
         current_time_plus_60 = datetime.now(timezone.utc) + timedelta(seconds=60)
         tasks = []
         while not self.collect_request_queue.empty():
@@ -137,6 +141,7 @@ class Scheduler:
         # Reinsert valid tasks into the priority queue
         for task in valid_tasks:
             await self.collect_request_queue.put(task)
+        logger.info(f"Finished sorting collect request queue")
 
     async def dispatch_task_to_orchestrator(self, task) -> None:
         """Dispatch the next task from the queue to the orchestrator."""
@@ -166,7 +171,7 @@ class Scheduler:
 
             # Enqueue tasks once the orchestrator is free
             logger.info("Waiting for orchestrator to be idle..")
-            await self.wait_until_first_completed(
+            await wait_until_first_completed(
                 [self.orchestrator_is_ready, self.mode_change_event, self.shutdown_event]
             )
             if self.current_mode != "survey" or self.shutdown_event.is_set():
@@ -212,6 +217,7 @@ class Scheduler:
             ).total_seconds() - 60
 
             while sleep_time > 0:
+                logger.info(f"Sleeping until (AOS - 60s) for {sleep_time} seconds..")
                 await wait_until_first_completed(
                     [self.new_task_event, self.shutdown_event, self.mode_change_event], [asyncio.sleep(sleep_time)]
                 )

@@ -38,6 +38,7 @@ class SchedulerClientConfig(MessageNodeConfig):
                 "observatory.scheduler.command.set_mode",
                 "observatory.scheduler.command.status",
                 "observatory.scheduler.command.stop_scheduling",
+                "observatory.scheduler.command.enqueue_collect_request",
             ],
         ),
     ]

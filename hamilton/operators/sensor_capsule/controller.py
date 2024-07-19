@@ -35,6 +35,10 @@ class SensorCapsuleCommandHandler(MessageHandler):
             telemetry_type = "status"
             response = await self.sensor_capsule.status()
 
+        if command == "generate_collect_requests":
+            telemetry_type = "collect_request_list"
+            response = await self.sensor_capsule.generate_collect_requests(parameters["start_time"], parameters["end_time"])
+
         if telemetry_type is not None:
             routing_key = f"{self.routing_key_base}.{telemetry_type}"
             telemetry_msg = self.node_operations.msg_generator.generate_telemetry(telemetry_type, response)

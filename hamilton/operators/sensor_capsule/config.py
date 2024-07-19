@@ -16,14 +16,18 @@ class SensorCapsuleControllerConfig(MessageNodeConfig):
     ]
     publishings = [
         Publishing(
-            exchange="scheduler", rpc=False, routing_keys=["observatory.scheduler.telemetry.status"]
+            exchange="sensor_capsule",
+            routing_keys=[
+                "observatory.sensor_capsule.telemetry.status",
+                "observatory.sensor_capsule.telemetry.collect_request_list",
+            ],
         ),
     ]
 
     bolt_ip: str = "localhost"
     bolt_port: int = 5140
     bolt_route: str = "/bolt/collectrequest"
-    bolt_poll_interval: int = 5  # seconds
+    bolt_poll_interval: int = 10  # seconds
     spout_ip: str = "localhost"
     spout_port: int = 5132
     spout_route: str = "/spout/json"
@@ -46,6 +50,7 @@ class SensorCapsuleClientConfig(MessageNodeConfig):
             routing_keys=[
                 "observatory.sensor_capsule.command.post_collect_response",
                 "observatory.sensor_capsule.command.status",
+                "observatory.sensor_capsule.command.generate_collect_requests",
             ],
         ),
     ]

@@ -40,6 +40,11 @@ class SchedulerCommandHandler(MessageHandler):
             mode = parameters.get("mode")
             await self.scheduler.set_mode(mode=mode)
 
+        if command == "enqueue_collect_request":
+            telemetry_type = None
+            task = parameters.get("task")
+            await self.scheduler.enqueue_collect_request_task(task=task)
+
         if telemetry_type is not None:
             routing_key = f"{self.routing_key_base}.{telemetry_type}"
             telemetry_msg = self.node_operations.msg_generator.generate_telemetry(telemetry_type, response)
