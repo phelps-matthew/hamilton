@@ -68,6 +68,16 @@ class SpaceObjectTracker:
 
         return satellite
 
+    async def get_tle(self, sat_id: str) -> tuple[str, str]:
+        try:
+            satellite_record = await self.db.query_record(sat_id)
+            tle_line_1 = satellite_record["tle1"]
+            tle_line_2 = satellite_record["tle2"]
+        except Exception as e:
+            logger.error(f"Failed to get TLE for {sat_id}: {e}")
+
+        return tle_line_1, tle_line_2
+
     async def get_kinematic_state(self, sat_id=None, time=None) -> dict:
         """Calculate observational params for single space object at a given time
 

@@ -27,7 +27,12 @@ class AstrodynamicsCommandHandler(MessageHandler):
         command = message["payload"]["commandType"]
         parameters = message["payload"]["parameters"]
 
-        if command == "get_kinematic_state":
+        if command == "get_tle":
+            telemetry_type = "tle"
+            sat_id = parameters.get("sat_id")
+            response = await self.so_tracker.get_tle(sat_id)
+
+        elif command == "get_kinematic_state":
             telemetry_type = "kinematic_state"
             sat_id = parameters.get("sat_id")
             time = parameters.get("time", None)

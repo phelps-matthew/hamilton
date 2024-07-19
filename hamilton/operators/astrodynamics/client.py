@@ -38,6 +38,11 @@ class AstrodynamicsClient(AsyncMessageNodeOperator):
             response = await self.publish_message(routing_key, message)
         return response
 
+    async def get_tle(self, sat_id: str) -> dict[str, Any]:
+        command = "get_tle"
+        parameters = {"sat_id": sat_id}
+        return await self._publish_command(command, parameters, rpc=True)
+
     async def get_kinematic_state(self, sat_id: str, time: Optional[datetime] = None) -> dict[str, Any]:
         command = "get_kinematic_state"
         parameters = {"sat_id": sat_id, "time": time}
