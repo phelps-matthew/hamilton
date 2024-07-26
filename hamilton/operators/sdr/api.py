@@ -7,7 +7,7 @@ from typing import Literal
 from datetime import datetime
 from hamilton.operators.sdr.config import SDRControllerConfig
 #from hamilton.operators.sdr.flowgraphs.record_sigmf import SigMFRecordFlowgraph
-from hamilton.operators.sdr.flowgraphs.new_record_sigmf import SigMFRecordFlowgraph
+from hamilton.operators.sdr.flowgraphs.record_sigmf import SigMFRecordFlowgraph
 from hamilton.operators.relay.client import RelayClient
 from hamilton.operators.radiometrics.client import RadiometricsClient
 from hamilton.common.utils import CustomJSONEncoder
@@ -57,7 +57,7 @@ class SDRSigMFRecord:
         """Set unique filename for SigMF recording."""
         current_time = datetime.utcnow()
         formatted_time = current_time.strftime("%Y%m%d_%H%M%S")
-        self.filename = str(self.obs_dir) + f"/{self.sat_id}_{self.band}_{formatted_time}"
+        self.filename = str(self.obs_dir) + f"/{formatted_time}_{self.band}_{self.sat_id}"
 
     def overwrite_sample_rate(self):
         if self.filename is not None:
