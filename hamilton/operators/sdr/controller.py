@@ -26,7 +26,7 @@ class SDRCommandHandler(MessageHandler):
         await self.radiometrics.start()
 
     async def _stop_devices(self):
-        await self.recorder.stop_record()
+        #await self.recorder.stop_record()
         await self.relay.stop()
         await self.radiometrics.stop()
 

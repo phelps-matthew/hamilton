@@ -1,6 +1,7 @@
 import numpy as np
 from datetime import datetime, timedelta
 from gnuradio import gr
+import pmt
 import sigmf
 from sigmf import SigMFFile
 import threading
@@ -30,8 +31,11 @@ class SigMFUSRPSink(gr.sync_block):
     buffer sizes are 400kB-2MB, which results in writing every 1-5 seconds. 1MB buffer write every 2.62 seconds.
     """
 
-    def __init__(self, filename, uhd_source, description_meta, buffer_size_bytes=1048576):  # 1MB buffer
+    def __init__(self, sample_rate, filename, uhd_source, description_meta, buffer_size_bytes=1048576):  # 1MB buffer
         gr.sync_block.__init__(self, name="Custom SigMF Sink", in_sig=[np.complex64], out_sig=None)
+        self.message_port_register_in(pmt.intern("annotations"))
+        self.set_msg_handler(pmt.intern("annotations"), self.handle_annotation)
+        self.sample_rate = sample_rate
         self.filename = Path(filename)
         self.uhd_source = uhd_source
         self.description_meta = description_meta
@@ -51,6 +55,16 @@ class SigMFUSRPSink(gr.sync_block):
         self._initialize_metadata()
         return True
 
+    def handle_annotation(self, msg):
+        annotation = pmt.to_python(msg)
+        with self.lock:
+            self.meta.add_annotation(
+                annotation['core:sample_start'],
+                annotation['core:sample_count'],
+                metadata=annotation
+            )
+        self._write_metadata()
+
     def _initialize_metadata(self):
         logger.info("Initializing metadata")
         usrp_info = self.uhd_source.get_usrp_info()
@@ -61,14 +75,14 @@ class SigMFUSRPSink(gr.sync_block):
         self.meta = SigMFFile(
             global_info={
                 SigMFFile.DATATYPE_KEY: "cf32_le",
-                SigMFFile.SAMPLE_RATE_KEY: self.uhd_source.get_samp_rate(),
-                SigMFFile.AUTHOR_KEY: "GNURadio Custom SigMF Sink",
+                SigMFFile.SAMPLE_RATE_KEY: self.sample_rate,
+                SigMFFile.AUTHOR_KEY: "Hamilton",
                 SigMFFile.DESCRIPTION_KEY: self.description_meta,
                 SigMFFile.RECORDER_KEY: f"USRP {mboard_id} with {daughterboard_id}",
                 SigMFFile.VERSION_KEY: sigmf.__version__,
                 SigMFFile.FREQUENCY_KEY: self.uhd_source.get_center_freq(),
                 SigMFFile.DATETIME_KEY: self._get_time().isoformat() + "Z",
-                SigMFFile.HW_KEY: f"USRP {mboard_id} with {daughterboard_id}",
+                SigMFFile.HW_KEY: "crossed-yagi_PGA-103+_B200",
                 "core:hw_serial": serial_number,
                 "core:gps_locked": self._gps_locked(),
             }
@@ -140,19 +154,6 @@ class SigMFUSRPSink(gr.sync_block):
         full_secs = current_time.get_full_secs()
         frac_secs = current_time.get_frac_secs()
         return datetime.utcfromtimestamp(full_secs) + timedelta(seconds=frac_secs)
-
-    def add_annotation(self, metadata):
-        with self.lock:
-            self.meta.add_annotation(self.sample_count, 1, metadata=metadata)
-        self._write_metadata()
-
-    def add_antenna_pointing(self, azimuth, elevation):
-        self.add_annotation(
-            {
-                "custom:azimuth": azimuth,
-                "custom:elevation": elevation,
-            }
-        )
 
     def stop(self):
         with self.lock:

@@ -20,11 +20,16 @@ from gnuradio.eng_arg import eng_float, intx
 from gnuradio import eng_notation
 from gnuradio import uhd
 import time
-import gr_sigmf
 import threading
 import logging
+import asyncio
+
+from hamilton.operators.sdr.flowgraphs.blocks.sigmf_block import SigMFUSRPSink
+from hamilton.operators.sdr.flowgraphs.blocks.rmq_block import RMQSource
+from hamilton.operators.sdr.flowgraphs.rmq.rmq_controller import RMQController
 
 logger = logging.getLogger(__name__)
+
 
 class SigMFRecordFlowgraph(gr.top_block):
 
@@ -53,7 +58,6 @@ class SigMFRecordFlowgraph(gr.top_block):
         self.ch0_antenna = ch0_antenna
         self.filename = filename
 
-
         ##################################################
         # Log the initializtion arguments (MP)
         ##################################################
@@ -65,10 +69,10 @@ class SigMFRecordFlowgraph(gr.top_block):
         logger.info(f"CH0_ANTENNA: {self.ch0_antenna}")
         logger.info(f"FILENAME: {self.filename}")
 
-
         ##################################################
         # Blocks
         ##################################################
+        self.rmq_source = RMQSource()
         self.uhd_usrp_source_0 = uhd.usrp_source(
             ",".join(("", "")),
             uhd.stream_args(
@@ -91,25 +95,30 @@ class SigMFRecordFlowgraph(gr.top_block):
         self.uhd_usrp_source_0.set_antenna("RX2", 0)
         self.uhd_usrp_source_0.set_bandwidth(0.2e6, 0)
         self.uhd_usrp_source_0.set_gain(rx_gain, 0)
-        self.sigmf_usrp_gps_message_source_0 = gr_sigmf.usrp_gps_message_source("", 1)
-        self.sigmf_sink_0 = gr_sigmf.sink("cf32", self.filename, gr_sigmf.sigmf_time_mode_relative, False)
-        self.sigmf_sink_0.set_global_meta("core:sample_rate", self.target_samp_rate)
-        self.sigmf_sink_0.set_global_meta("core:description", sat_id)
-        self.sigmf_sink_0.set_global_meta("core:author", "Matthew Phelps")
-        self.sigmf_sink_0.set_global_meta("core:license", "")
-        self.sigmf_sink_0.set_global_meta("core:hw", "crossed-yagi_PGA-103+_B200")
-        #self.sigmf_sink_0.set_global_meta("custom:metadata", self.metadata)
 
         self.rational_resampler_xxx_0 = filter.rational_resampler_ccc(
             interpolation=int(target_samp_rate), decimation=int(samp_rate), taps=[], fractional_bw=0
         )
 
+        self.sigmf_sink_0 = SigMFUSRPSink(
+            sample_rate=self.target_samp_rate,
+            filename=self.filename,
+            uhd_source=self.uhd_usrp_source_0,
+            description_meta=f"IQ Data Capture for NORAD ID: {self.sat_id}",
+        )
+
+        ##################################################
+        # RMQ Controller
+        ##################################################
+        self.rmq_controller = RMQController(self.rmq_source)
+        self.rmq_source.set_controller(self.rmq_controller)
+
         ##################################################
         # Connections
         ##################################################
-        self.msg_connect((self.sigmf_usrp_gps_message_source_0, "out"), (self.sigmf_sink_0, "gps"))
         self.connect((self.rational_resampler_xxx_0, 0), (self.sigmf_sink_0, 0))
         self.connect((self.uhd_usrp_source_0, 0), (self.rational_resampler_xxx_0, 0))
+        self.msg_connect((self.rmq_source, "annotations"), (self.sigmf_sink_0, "annotations"))
 
     def get_target_samp_rate(self):
         return self.target_samp_rate
@@ -164,6 +173,36 @@ class SigMFRecordFlowgraph(gr.top_block):
     def get_ch0_antenna(self):
         self.uhd_usrp_source_0.get_antenna(0)
 
+    def log_antenna_pointing(self, azimuth, elevation):
+        self.sigmf_sink_0.add_antenna_pointing(azimuth, elevation)
+
+    def start(self):
+        try:
+            #self.rmq_source.start()
+            super().start()
+        except Exception as e:
+            logger.error(f"Error starting flowgraph: {e}")
+            self.stop()
+
+    def stop(self):
+        try:
+            super().stop()
+            #if self.rmq_source:
+                #self.rmq_source.stop()
+        except Exception as e:
+            logger.error(f"Error stopping flowgraph: {e}")
+        #finally:
+            #self.wait()  # Ensure wait is called to clean up properly
+
+    #def wait(self):
+    #    try:
+    #        super().wait()
+    #    except Exception as e:
+    #        logger.error(f"Error waiting for flowgraph: {e}")
+    #    finally:
+    #        self.stop()  # Ensure stop is called to clean up properly
+
+
 def main(top_block_cls=SigMFRecordFlowgraph, options=None):
     tb = top_block_cls()
 
@@ -171,15 +210,20 @@ def main(top_block_cls=SigMFRecordFlowgraph, options=None):
         tb.stop()
         tb.wait()
 
-        sys.exit(0)
-
     signal.signal(signal.SIGINT, sig_handler)
     signal.signal(signal.SIGTERM, sig_handler)
 
-    tb.start()
+    try:
+        tb.start()
+        tb.wait()
+    except Exception as e:
+        logger.error(f"Error in main: {e}")
+    finally:
+        tb.stop()
 
-    tb.wait()
-
+    # Add a small delay to allow for proper cleanup
+    time.sleep(1)
 
 if __name__ == "__main__":
     main()
+

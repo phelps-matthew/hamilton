@@ -6,7 +6,6 @@ internally handles relay control of the LNA.
 from typing import Literal
 from datetime import datetime
 from hamilton.operators.sdr.config import SDRControllerConfig
-#from hamilton.operators.sdr.flowgraphs.record_sigmf import SigMFRecordFlowgraph
 from hamilton.operators.sdr.flowgraphs.record_sigmf import SigMFRecordFlowgraph
 from hamilton.operators.relay.client import RelayClient
 from hamilton.operators.radiometrics.client import RadiometricsClient
