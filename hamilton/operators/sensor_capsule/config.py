@@ -27,7 +27,7 @@ class SensorCapsuleControllerConfig(MessageNodeConfig):
     bolt_ip: str = "localhost"
     bolt_port: int = 5140
     bolt_route: str = "/bolt/collectrequest"
-    bolt_poll_interval: int = 10  # seconds
+    bolt_poll_interval: int = 60 *5  # seconds
     spout_ip: str = "localhost"
     spout_port: int = 5132
     spout_route: str = "/spout/json"
