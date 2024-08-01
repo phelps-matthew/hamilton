@@ -115,7 +115,7 @@ class SpaceObjectTracker:
 
         return obs_params
 
-    def get_all_obs_params(self, sat_name=True, norad_id=True):
+    def get_all_obs_params(self, sat_name=True, norad_id=True, active=True):
         """Return all observational parameters from last update.
 
         Args:
@@ -124,6 +124,7 @@ class SpaceObjectTracker:
 
         Returns: dict, observational params (az, el, etc.)
         """
+        #import ipdb; ipdb.set_trace()
         obs_params = self.obs_params
         if not sat_name and not norad_id:
             return obs_params
@@ -139,6 +140,18 @@ class SpaceObjectTracker:
                     obs_params[k].update(
                         {
                             "norad_id": self._root_sat_db[k]["norad_cat_id"],
+                        }
+                    )
+                if active:
+                    je9pel = self._root_sat_db[k]["je9pel"]
+                    is_active = False
+                    if je9pel:
+                        for link in je9pel["downlink"]:
+                            if link["active"]:
+                                is_active = True
+                    obs_params[k].update(
+                        {
+                            "active": is_active,
                         }
                     )
         return obs_params
