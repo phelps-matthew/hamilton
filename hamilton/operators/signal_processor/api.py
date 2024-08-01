@@ -54,22 +54,19 @@ class SignalProcessor:
 
         return kinematic_state_timeseries, azel_timeseries
 
-    async def plot_spectrogram(self, data, sample_rate):
-        fig, ax = plt.subplots(figsize=(10, 6))
+    async def plot_spectrogram(self, data, sample_rate, ax):
         Pxx, freqs, bins, im = ax.specgram(data, NFFT=1024, Fs=sample_rate, window=np.hanning(1024), noverlap=512)
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Frequency (Hz)")
-        return fig, ax
+        return ax
 
-    async def plot_psd(self, data, sample_rate):
-        fig, ax = plt.subplots(figsize=(10, 6))
+    async def plot_psd(self, data, sample_rate, ax):
         ax.psd(data, NFFT=1024, Fs=sample_rate, window=np.hanning(1024))
         ax.set_xlabel("Frequency (Hz)")
         ax.set_ylabel("Power/Frequency (dB/Hz)")
-        return fig, ax
+        return ax
 
-    async def plot_doppler(self, kinematic_state_timeseries, center_freq):
-        fig, ax = plt.subplots(figsize=(10, 6))
+    async def plot_doppler(self, kinematic_state_timeseries, center_freq, ax):
         times = [t[0] for t in kinematic_state_timeseries]
         range_rates = [t[1]["range_rate"] for t in kinematic_state_timeseries]
         speed_of_light = 299792.458  # km/s
@@ -81,11 +78,9 @@ class SignalProcessor:
         ax.set_ylabel(r"$\Delta f$ (Hz)")
         ax.grid(True)
         ax.set_ylim(-25000, 25000)
-        return fig, ax
+        return ax
 
-    async def plot_orbit(self, kinematic_state_timeseries, azel_timeseries):
-        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection="polar"))
-
+    async def plot_orbit(self, kinematic_state_timeseries, azel_timeseries, ax):
         # Extract az and el from kinematic_state_timeseries
         ks_az = [np.radians(t[1]["az"]) for t in kinematic_state_timeseries]
         ks_el = [90 - t[1]["el"] for t in kinematic_state_timeseries]
@@ -170,7 +165,7 @@ class SignalProcessor:
             textcoords="offset points",
             ha="center",
             va="center",
-            size=12,
+            size=8,
         )
         ax.annotate(
             "LOS",
@@ -179,12 +174,13 @@ class SignalProcessor:
             textcoords="offset points",
             ha="center",
             va="center",
-            size=12,
+            size=8,
         )
 
-        ax.legend(loc="upper right")
+        # ax.legend(loc="upper right")
+        ax.legend(loc="upper right", bbox_to_anchor=(1.1, 1.1), fontsize="small")
 
-        return fig, ax
+        return ax
 
     async def plot_panel(self, sigmf_file, filename):
         kinematic_state_timeseries, azel_timeseries = await self.extract_annotation_timeseries(sigmf_file)
@@ -193,27 +189,28 @@ class SignalProcessor:
         sample_rate = sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
 
         # Create a figure with a 2x2 grid, with a 4:1 ratio between the first and second column
-        fig = plt.figure(figsize=(20, 16))
-        gs = fig.add_gridspec(2, 2, width_ratios=[4, 1])
+        # fig = plt.figure(figsize=(1.0 * 20, 1.0 * 7.5))
+        fig = plt.figure(figsize=(16, 9))
+        gs = fig.add_gridspec(2, 2, width_ratios=[4, 1], height_ratios=[3, 2])
 
         # Spectrogram
         ax_spectrogram = fig.add_subplot(gs[0, 0])
-        _, ax_spectrogram = await self.plot_spectrogram(samples, sample_rate)
+        ax_spectrogram = await self.plot_spectrogram(samples, sample_rate, ax_spectrogram)
         ax_spectrogram.set_title("Spectrogram")
 
         # PSD
-        ax_psd = fig.add_subplot(gs[0, 1])
-        _, ax_psd = await self.plot_psd(samples, sample_rate)
+        ax_psd = fig.add_subplot(gs[1, 1])
+        ax_psd = await self.plot_psd(samples, sample_rate, ax_psd)
         ax_psd.set_title("Power Spectral Density")
 
         # Doppler
         ax_doppler = fig.add_subplot(gs[1, 0])
-        _, ax_doppler = await self.plot_doppler(kinematic_state_timeseries, center_freq)
+        ax_doppler = await self.plot_doppler(kinematic_state_timeseries, center_freq, ax_doppler)
         ax_doppler.set_title("Doppler Shift")
 
         # Orbit
-        ax_orbit = fig.add_subplot(gs[1, 1], projection="polar")
-        _, ax_orbit = await self.plot_orbit(kinematic_state_timeseries, azel_timeseries)
+        ax_orbit = fig.add_subplot(gs[0, 1], projection="polar")
+        ax_orbit = await self.plot_orbit(kinematic_state_timeseries, azel_timeseries, ax_orbit)
         ax_orbit.set_title("Orbit")
 
         # Adjust layout and save
@@ -222,7 +219,7 @@ class SignalProcessor:
         plt.close(fig)
         logger.info(f"Finished plotting panel for {filename}")
 
-    async def plot_panels(self, force_replot=False):
+    async def plot_panels(self, force_replot=True):
         for data_file in self.observations_dir.glob("*.sigmf-data"):
             panel_filename = self.panels_dir / f"{data_file.stem}_panel.png"
             if not panel_filename.exists() or force_replot:
