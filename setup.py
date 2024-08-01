@@ -16,6 +16,7 @@ setuptools.setup(
         "sigmf",
         "aio-pika",
         "aiohttp",
+        "bson",
     ]
 )
 
