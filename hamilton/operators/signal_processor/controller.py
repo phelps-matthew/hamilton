@@ -33,6 +33,11 @@ class SignalProcessorCommandHandler(MessageHandler):
             await self.signal_processor.plot_spectrograms(*parameters)
             response = {"spectrogram_status": "complete"}
 
+        elif command == "generate_panels":
+            telemetry_type = "status"
+            await self.signal_processor.plot_panels(*parameters)
+            response = {"panel_status": "complete"}
+
         if telemetry_type is not None:
             routing_key = f"{self.routing_key_base}.{telemetry_type}"
             telemetry_msg = self.node_operations.msg_generator.generate_telemetry(telemetry_type, response)

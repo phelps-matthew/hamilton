@@ -31,6 +31,7 @@ class SignalProcessorClientConfig(MessageNodeConfig):
             routing_keys=[
                 "observatory.signal_processor.command.generate_psds",
                 "observatory.signal_processor.command.generate_spectrograms",
+                "observatory.signal_processor.command.generate_panels",
             ],
         ),
     ]
