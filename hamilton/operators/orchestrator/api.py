@@ -143,8 +143,7 @@ class Orchestrator:
 
             # Signal processing
             logger.info("Signal processing.")
-            await self.signal_processor.generate_psds()
-            await self.signal_processor.generate_spectrograms()
+            await self.signal_processor.generate_panels()
 
             # Finished
             await self.stop_orchestrating()
