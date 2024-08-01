@@ -90,9 +90,9 @@ async def main():
     try:
         await client.start()
 
-        sat_id = "39446"
-        # response = await client.get_kinematic_state(sat_id=sat_id)
-        # print(f"get_kinematic_state: {response}")
+        sat_id = "39427"
+        response = await client.get_kinematic_state(sat_id=sat_id)
+        print(f"get_kinematic_state: {response}")
 
         # response = await client.get_aos_los(sat_id=sat_id)
         # print(f"get_aos_los: {response}")
@@ -105,10 +105,10 @@ async def main():
         # response = await client.recompute_all_orbits()
         # print(f"recompute_all_orbits: {response}")
 
-        response = await client.get_all_aos_los(
-            start_time=datetime.now(tz=timezone.utc), end_time=datetime.now(tz=timezone.utc) + timedelta(hours=1)
-        )
-        print(f"get_all_aos_los: {response}")
+        #response = await client.get_all_aos_los(
+        #    start_time=datetime.now(tz=timezone.utc), end_time=datetime.now(tz=timezone.utc) + timedelta(hours=1)
+        #)
+        #print(f"get_all_aos_los: {response}")
 
     except Exception as e:
         print(f"An unexpected error occurred: {e}")

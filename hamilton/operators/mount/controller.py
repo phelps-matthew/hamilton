@@ -25,7 +25,7 @@ class MountCommandHandler(MessageHandler):
         parameters = message["payload"]["parameters"]
 
         if command == "set":
-            telemetry_type = None
+            telemetry_type = "azel"
             response = self.mount.set(parameters.get("azimuth"), parameters.get("elevation"))
 
         elif command == "status":

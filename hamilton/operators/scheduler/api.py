@@ -157,6 +157,7 @@ class Scheduler:
             await self.clear_queue()
             await self.run_survey()
         elif mode == "inactive":
+            await self.clear_queue()
             await self.run_inactive()
         elif mode == "collect_request":
             await self.sort_collect_request_queue()

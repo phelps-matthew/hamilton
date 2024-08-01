@@ -82,7 +82,7 @@ class SpaceObjectTracker:
         """Calculate observational params for single space object at a given time
 
         Args:
-            sat_id: satnogs satellite identifier
+            sat_id: NORAD satellite identifier
             time: time to evaluate TLE at, defaults to current UTC time
 
         Returns: dict, observational params (az, el, az_rate, el_rate, range, rel_vel)
@@ -105,12 +105,13 @@ class SpaceObjectTracker:
                 range_rate = params[5].km_per_s
 
                 kinematic_state = {
+                    "sat_id": sat_id,
                     "az": az,
                     "el": el,
                     "az_rate": az_rate,
                     "el_rate": el_rate,
                     "range": range_,
-                    "rel_vel": range_rate,
+                    "range_rate": range_rate,
                     "time": time,
                 }
             except Exception as e:
