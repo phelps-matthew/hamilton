@@ -33,6 +33,7 @@ class SignalProcessor:
         fig.savefig(filename, dpi=400)
         plt.close()
         del fig
+        logger.info(f"Finished plotting PSD for {filename}")
 
     async def plot_spectrogram(self, data, sample_rate, filename):
         logger.info(f"Plotting spectrogram for {filename}")
@@ -45,6 +46,7 @@ class SignalProcessor:
         fig.savefig(filename, dpi=400)
         plt.close()
         del fig
+        logger.info(f"Finished plotting spectrogram for {filename}")
 
     async def plot_psds(self, force_replot=False):
         for data_file in self.observations_dir.glob("*.sigmf-data"):
@@ -53,19 +55,18 @@ class SignalProcessor:
                 meta_file = data_file.with_suffix(".sigmf-meta")
                 with open(meta_file) as f:
                     metadata = json.load(f)
-                smf = sigmf.SigMFFile(metadata=metadata, data_file=data_file)
+                smf = sigmf.SigMFFile(metadata=metadata, data_file=data_file, skip_checksum=True)
                 samples = smf.read_samples()
                 await self.plot_psd(samples, smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY), psd_filename)
 
     async def plot_spectrograms(self, force_replot=False):
         for data_file in self.observations_dir.glob("*.sigmf-data"):
             spectrogram_filename = self.spectrogram_dir / f"{data_file.stem}_spectrogram.png"
-            print(spectrogram_filename)
             if not spectrogram_filename.exists() or force_replot:
                 meta_file = data_file.with_suffix(".sigmf-meta")
                 with open(meta_file) as f:
                     metadata = json.load(f)
-                smf = sigmf.SigMFFile(metadata=metadata, data_file=data_file)
+                smf = sigmf.SigMFFile(metadata=metadata, data_file=data_file, skip_checksum=True)
                 samples = smf.read_samples()
                 await self.plot_spectrogram(
                     samples, smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY), spectrogram_filename
