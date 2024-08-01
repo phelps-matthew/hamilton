@@ -183,6 +183,7 @@ class SignalProcessor:
         return ax
 
     async def plot_panel(self, sigmf_file, filename):
+        logger.info(f"Plotting panel for {filename}")
         kinematic_state_timeseries, azel_timeseries = await self.extract_annotation_timeseries(sigmf_file)
         center_freq = sigmf_file.get_global_field(sigmf.SigMFFile.FREQUENCY_KEY)
         samples = sigmf_file.read_samples()
@@ -219,7 +220,7 @@ class SignalProcessor:
         plt.close(fig)
         logger.info(f"Finished plotting panel for {filename}")
 
-    async def plot_panels(self, force_replot=True):
+    async def plot_panels(self, force_replot=False):
         for data_file in self.observations_dir.glob("*.sigmf-data"):
             panel_filename = self.panels_dir / f"{data_file.stem}_panel.png"
             if not panel_filename.exists() or force_replot:
@@ -229,26 +230,26 @@ class SignalProcessor:
                 sigmf_file = sigmf.SigMFFile(metadata=metadata, data_file=data_file, skip_checksum=True)
                 await self.plot_panel(sigmf_file, panel_filename)
 
-    async def plot_psds(self, force_replot=False):
-        for data_file in self.observations_dir.glob("*.sigmf-data"):
-            psd_filename = self.psd_dir / f"{data_file.stem}_psd.png"
-            if not psd_filename.exists() or force_replot:
-                meta_file = data_file.with_suffix(".sigmf-meta")
-                with open(meta_file) as f:
-                    metadata = json.load(f)
-                smf = sigmf.SigMFFile(metadata=metadata, data_file=data_file, skip_checksum=True)
-                samples = smf.read_samples()
-                await self.plot_psd(samples, smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY), psd_filename)
+    #async def plot_psds(self, force_replot=False):
+    #    for data_file in self.observations_dir.glob("*.sigmf-data"):
+    #        psd_filename = self.psd_dir / f"{data_file.stem}_psd.png"
+    #        if not psd_filename.exists() or force_replot:
+    #            meta_file = data_file.with_suffix(".sigmf-meta")
+    #            with open(meta_file) as f:
+    #                metadata = json.load(f)
+    #            smf = sigmf.SigMFFile(metadata=metadata, data_file=data_file, skip_checksum=True)
+    #            samples = smf.read_samples()
+    #            await self.plot_psd(samples, smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY), psd_filename)
 
-    async def plot_spectrograms(self, force_replot=False):
-        for data_file in self.observations_dir.glob("*.sigmf-data"):
-            spectrogram_filename = self.spectrogram_dir / f"{data_file.stem}_spectrogram.png"
-            if not spectrogram_filename.exists() or force_replot:
-                meta_file = data_file.with_suffix(".sigmf-meta")
-                with open(meta_file) as f:
-                    metadata = json.load(f)
-                smf = sigmf.SigMFFile(metadata=metadata, data_file=data_file, skip_checksum=True)
-                samples = smf.read_samples()
-                await self.plot_spectrogram(
-                    samples, smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY), spectrogram_filename
-                )
+    #async def plot_spectrograms(self, force_replot=False):
+    #    for data_file in self.observations_dir.glob("*.sigmf-data"):
+    #        spectrogram_filename = self.spectrogram_dir / f"{data_file.stem}_spectrogram.png"
+    #        if not spectrogram_filename.exists() or force_replot:
+    #            meta_file = data_file.with_suffix(".sigmf-meta")
+    #            with open(meta_file) as f:
+    #                metadata = json.load(f)
+    #            smf = sigmf.SigMFFile(metadata=metadata, data_file=data_file, skip_checksum=True)
+    #            samples = smf.read_samples()
+    #            await self.plot_spectrogram(
+    #                samples, smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY), spectrogram_filename
+    #            )
