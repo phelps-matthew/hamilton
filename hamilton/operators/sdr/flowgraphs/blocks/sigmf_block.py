@@ -1,13 +1,14 @@
-import numpy as np
+import logging
+import os
+import threading
 from datetime import datetime, timedelta
-from gnuradio import gr
+from pathlib import Path
+
+import numpy as np
 import pmt
+from gnuradio import gr
 import sigmf
 from sigmf import SigMFFile
-import threading
-from pathlib import Path
-import os
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +59,7 @@ class SigMFUSRPSink(gr.sync_block):
     def handle_annotation(self, msg):
         annotation = pmt.to_python(msg)
         with self.lock:
-            self.meta.add_annotation(
-                annotation['core:sample_start'],
-                annotation['core:sample_count'],
-                metadata=annotation
-            )
+            self.meta.add_annotation(start_index=self.sample_count, length=None, metadata=annotation)
         self._write_metadata()
 
     def _initialize_metadata(self):
