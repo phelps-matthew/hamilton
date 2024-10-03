@@ -68,16 +68,16 @@ service_name/
 
 ## Messaging System
 
-Hamilton uses a sophisticated messaging system built on top of RabbitMQ, providing a robust foundation for inter-service communication. The `messaging` module offers high-level abstractions for asynchronous message handling:
+Hamilton uses a messaging system built on top of RabbitMQ, providing a robust foundation for inter-service communication. The `messaging` module offers high-level abstractions for asynchronous message handling:
 
 - `AsyncMessageNode`: A base class representing entities that consume and publish data, serving as the foundation for both clients and controllers.
 - `AsyncConsumer` and `AsyncProducer`: Specialized classes for message consumption and production.
-- `RPCManager`: Handles Remote Procedure Call (RPC) style communication with system-wide observability.
+- `RPCManager`: Handles Remote Procedure Call (RPC) style communication without private queues to enable system-wide observability.
 - `MessageHandler`: An abstract base class for implementing custom message handlers.
 
 ### Message Schemas
 
-The `base/messages.py` file defines the core message types used throughout the system. Here's a concise example of the message schemas:
+The `base/messages.py` file defines the core message types used throughout the system. Example message schemas:
 
 ```python
 class CommandPayload(TypedDict):
@@ -151,7 +151,7 @@ This configuration automatically sets up the necessary RabbitMQ channels, connec
    pip install -e .
    ```
 
-3. Set up RabbitMQ and other dependencies (detailed instructions in `docs/setup.md`)
+3. Set up RabbitMQ and other dependencies
 
 ## Client Usage
 
