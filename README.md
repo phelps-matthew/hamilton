@@ -1,145 +1,182 @@
-# hamilton
-Autonomous RF groundstation control software.
+# Hamilton
 
-## Project Overview
+Autonmous RF groundstation control software for operation on resource-constrained environments like Raspberry Pi.
 
-Hamilton is built as a distributed system of microservices, leveraging modern software engineering practices and technologies to create a flexible and scalable platform for passive RF sensing. The system is capable of:
+## Features
 
-- Tracking and observing satellites
-- Collecting and processing RF signals
-- Performing advanced signal analysis
-- Managing and coordinating various hardware components
+- Microservices Architecture
+  - 12+ specialized services with asynchronous communication
+  - RabbitMQ-based messaging system with RPC support
+
+- Satellite Tracking & RF Signal Processing
+  - TLE satellite tracking and orbit prediction
+  - SigMF-compliant SDR control and data acquisition using GNU Radio
+  - Mount control for az/el antenna positioning
+
+- Hardware Management
+  - Simple interface for custom hardware drivers/apis
+
+- Data Handling & System Management
+  - MongoDB-based storage for observation data
+  - Automated task scheduling and centralized orchestration
+  - Cross-service logging and health monitoring
 
 ## System Architecture
 
-The Hamilton system is composed of several key components:
+1. **Microservices**: Core functionalities are divided into 12 services, including Mount Controller, SDR Controller, Astrodynamics, Database Updater, Radiometrics, Orchestrator, Scheduler, Signal Processor, and Tracker.
 
-1. **Microservices**: The core functionality is divided into multiple microservices, each responsible for a specific aspect of the system. These include:
-   - Mount Controller
-   - SDR (Software Defined Radio) Controller
-   - Astrodynamics
-   - Database
-   - Radiometrics
-   - Orchestrator
-   - Scheduler
-   - Signal Processor
-   - Tracker
+2. **Message Queue**: RabbitMQ serves as the central message broker, enabling asynchronous communication, event-driven messaging, and decoupling between components.
 
-2. **Message Queue**: RabbitMQ is used as the central message broker, enabling asynchronous communication between microservices.
+3. **Service Management**: Systemd for service control and monitoring.
 
-3. **Service Management**: Systemd is utilized for managing and monitoring the various microservices.
+4. **Configuration**: Hierarchical configuration system for setup.
 
-4. **Configuration**: A hierarchical configuration system allows for flexible setup and management of the entire system.
+5. **Hardware Abstraction**: Largely missing, but flexible interface is provided for custom drivers/apis.
 
-5. **Hardware Abstraction**: Device drivers and controllers provide a unified interface for interacting with various hardware components.
+## Service Structure
 
-## Key Abstractions
+Each service in Hamilton follows a consistent file structure:
 
-### Messaging System
+```
+service_name/
+├── __init__.py
+├── api.py
+├── client.py
+├── config.py
+├── controller.py
+└── hamilton-service-name.service
+```
 
-The project uses a sophisticated messaging system built on top of RabbitMQ. The `messaging` module (`hamilton/messaging/`) provides abstractions for asynchronous message handling, including:
-
-- Async Consumers and Producers
-- RPC (Remote Procedure Call) Manager
-- Message Node abstractions
-
-The `base/messages.py` file defines the core message types used throughout the system:
-
-### Service Management
-
-Hamilton uses systemd for service management, providing robust control over the various microservices. Each service has its own `.service` file, allowing for easy start, stop, and monitoring of individual components.
-
-For more details on service management, see:
-
-https://github.com/phelps-matthew/hamilton/blob/e9e22b69610ed7a50f29f7287675058835cd2cb6/hamilton/docs/service_management.md?plain=1#L1-L38
-
-### Configuration
-
-The system uses a hierarchical configuration system, allowing for both global and service-specific settings. This is implemented in the `base/config.py` file.
+- `api.py`: Hardware interface or driver for the specific service.
+- `client.py`: Client for interacting with the service.
+- `config.py`: Service-specific configuration.
+- `controller.py`: Main service logic and message handling.
+- `hamilton-service-name.service`: Systemd service file for managing the service.
 
 ## Technology Stack
 
-- **Python**: The primary programming language used throughout the project.
-- **RabbitMQ**: Message broker for inter-service communication.
-- **Systemd**: Service management and monitoring.
-- **GNURadio**: Software-defined radio toolkit for signal processing.
-- **SQLite**: Database for storing satellite and observation data.
+| Component                | Technology                                |
+|--------------------------|-------------------------------------------|
+| Operating System         | Ubuntu Server 22.04 LTS                   |
+| Programming Language     | Python 3.10+                              |
+| Message Queue Client     | aio-pika (asyncio Python RabbitMQ client) |
+| Message Broker           | RabbitMQ                                  |
+| Database                 | MongoDB                                   |
+| Service Management       | systemd                                   |
+| VPN Solution             | WireGuard (Tailscale implementation)      |
+| Software-Defined Radio   | GNU Radio                                 |
 
-## Project Structure
+## Messaging System
 
-The project follows a modular structure, with each major component having its own directory:
+Hamilton uses a sophisticated messaging system built on top of RabbitMQ, providing a robust foundation for inter-service communication. The `messaging` module offers high-level abstractions for asynchronous message handling:
+
+- `AsyncMessageNode`: A base class representing entities that consume and publish data, serving as the foundation for both clients and controllers.
+- `AsyncConsumer` and `AsyncProducer`: Specialized classes for message consumption and production.
+- `RPCManager`: Handles Remote Procedure Call (RPC) style communication with system-wide observability.
+- `MessageHandler`: An abstract base class for implementing custom message handlers.
+
+### Message Schemas
+
+The `base/messages.py` file defines the core message types used throughout the system. Here's a concise example of the message schemas:
+
+```python
+class CommandPayload(TypedDict):
+    commandType: str
+    parameters: Dict[str, Union[str, int, float]]
+
+class TelemetryPayload(TypedDict):
+    telemetryType: str
+    parameters: Dict[str, Union[str, int, float]]
+
+class ResponsePayload(TypedDict):
+    responseType: str
+    data: Dict[str, Union[str, int, float]]
+
+class Message(TypedDict):
+    messageType: MessageType
+    timestamp: str
+    source: str
+    version: str
+    payload: Union[CommandPayload, TelemetryPayload, ResponsePayload]
+```
+
+### RPC (Remote Procedure Call)
+
+The system supports RPC-style communication with system-wide observability:
+
+- No private queues: All RPC messages are visible to any service.
+- Asynchronous communication: Services can request information and receive responses asynchronously.
+- Timeout and interruptible calls: RPC calls have configurable timeouts and can be interrupted.
+
+This design allows for comprehensive monitoring and debugging of all inter-service communication.
+
+## Configuration as Code
+
+Hamilton uses a configuration-as-code approach, which significantly reduces the boilerplate associated with RabbitMQ setup. The system in `base/config.py` provides:
+
+- Automatic declaration of exchanges
+- Automatic binding to queues based on routing key patterns
+- Automatic routing of messages to the correct exchange
+
+This approach abstracts away much of the complexity of RabbitMQ configuration. Example:
+
+```python
+class MountControllerConfig(MessageNodeConfig):
+    name = "MountController"
+    exchanges = [
+        Exchange(name="mount", type="topic", durable=True, auto_delete=False),
+    ]
+    bindings = [
+        Binding(exchange="mount", routing_keys=["observatory.mount.command.*"]),
+    ]
+    publishings = [
+        Publishing(exchange="mount", rpc=False, routing_keys=["observatory.mount.telemetry.azel"]),
+    ]
+
+    DEVICE_ADDRESS = "/dev/usbttymd01"
+```
+
+This configuration automatically sets up the necessary RabbitMQ channels, connections, exchanges, and bindings, reducing the amount of manual setup required.
 
 ## Installation
-First, clone the repository:
 
-```bash
-git clone https://github.com/yourusername/hamilton.git
-cd hamilton
-```
-Then install the library:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/phelps-matthew/hamilton.git
+   cd hamilton
+   ```
 
-```bash
-pip install -e .
-```
+2. Install the library:
+   ```bash
+   pip install -e .
+   ```
 
-Dependencies:
-```bash
-pip install pandas
-```
-# Usage
-## Dashboard
-TBI
+3. Set up RabbitMQ and other dependencies (detailed instructions in `docs/setup.md`)
 
-# System Design
-```
-hamilton/
-│
-├── devices/                        
-│   ├── mount/                      
-│   │   ├── driver.py               
-│   │   ├── controller.py           
-│   │   └── config.py               
-│   ├── sdr/                        
-│   │   ├── driver.py               
-│   │   ├── controller.py           
-│   │   └── config.py               
-│   ├── camera/                     
-│   │   ├── driver.py               
-│   │   ├── controller.py           
-│   │   └── config.py               
-│   └── relay/                      
-│       ├── driver.py               
-│       ├── controller.py           
-│       └── config.py               
-│
-├── tracking/                       
-│   ├── driver.py                   
-│   ├── controller.py               
-│   └── config.py                   
-│
-├── common/                         
-│   ├── rabbitmq_client.py          
-│   ├── health_monitor.py           
-│   ├── device_registry.py          
-│   └── logger.py                   
-│
-├── database/                       
-│   ├── db_manager.py               
-│   └── satellite_data.py           
-│
-├── UI/                             
-│   ├── dashboard/                  
-│   │   └── satellite_dashboard.py  
-│   ├── device_monitor/             
-│   │   └── device_monitor_dashboard.py  
-│   └── ...
-│
-├── command_control/                
-│   ├── command_processor.py        
-│   └── ...
-│
-└── README.md
-```
+## Client Usage
 
-# Notes
-* Installation: chmod +x mount.py
+Here's an example of using the MountClient to control the antenna:
+
+```python
+from hamilton.operators.mount.client import MountClient
+
+async def main():
+    client = MountClient()
+    await client.start()
+
+    # Get current mount status
+    status = await client.status()
+    print(f"Current position: Az={status['azimuth']}, El={status['elevation']}")
+
+    # Set new position
+    await client.set(azimuth=180, elevation=45)
+
+    # Stop the rotor
+    await client.stop_rotor()
+
+    await client.stop()
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
+```
