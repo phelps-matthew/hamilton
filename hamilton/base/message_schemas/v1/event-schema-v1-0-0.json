@@ -1,0 +1,37 @@
+{
+    "type": "object",
+    "properties": {
+      "messageType": {
+        "type": "string",
+        "enum": ["event"],
+        "description": "Indicates that this is an event message."
+      },
+      "eventType": {
+        "type": "string",
+        "enum": ["systemEvent", "alert", "statusUpdate"],
+        "description": "Specific type of event."
+      },
+      "timestamp": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Timestamp of when the event occurred."
+      },
+      "source": {
+        "type": "string",
+        "description": "Identifier for the source of the event."
+      },
+      "version": {
+        "type": "string",
+        "description": "Version of the event message format."
+      },
+      "payload": {
+        "type": "object",
+        "properties": {
+          // Define additional properties specific to each eventType
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["messageType", "eventType", "timestamp", "source", "version", "payload"],
+    "additionalProperties": false
+  }

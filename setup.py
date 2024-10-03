@@ -11,6 +11,12 @@ setuptools.setup(
         "pandas",
         "dash",
         "dash-bootstrap-components",
-        "skyfield"
+        "skyfield",
+        "pytest-asyncio",
+        "sigmf",
+        "aio-pika",
+        "aiohttp",
+        "bson",
     ]
 )
+

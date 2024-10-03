@@ -1,0 +1,13 @@
+{
+    "messageType": "command",
+    "timestamp": "2024-01-29T12:00:00Z",
+    "source": "camera01",
+    "version": "1.0",
+    "payload": {
+      "commandType": "startExposure",
+      "parameters": {
+        "exposureTime": 120,
+        "filters": ["infrared", "ultraviolet"]
+      }
+    }
+  }

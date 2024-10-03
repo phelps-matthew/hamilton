@@ -1,0 +1,167 @@
+exchanges:
+  - name: mount
+    type: topic
+    durable: true
+    auto_delete: false
+    bindings:
+      - service: MountController
+        routing_keys:
+          - observatory.device.mount.command.*
+      - service: MountClient
+        routing_keys:
+          - observatory.device.mount.telemetry.#
+    publishings:
+      - service: MountClient
+        rpc: True
+        routing_keys:
+          - observatory.device.mount.command.set
+          - observatory.device.mount.command.status
+          - observatory.device.mount.command.stop
+      - service: MountController
+        rpc: False
+        routing_keys:
+          - observatory.device.mount.telemetry.azel
+  - name: relay
+    type: topic
+    durable: true
+    auto_delete: false
+    bindings:
+      - service: RelayController
+        routing_keys:
+          - observatory.device.relay.command.*
+      - service: RelayClient
+        routing_keys:
+          - observatory.device.relay.telemetry.#
+    publishings:
+      - service: RelayClient
+        rpc: True
+        routing_keys:
+          - observatory.device.relay.command.set
+          - observatory.device.relay.command.status
+      - service: RelayController
+        rpc: False
+        routing_keys:
+          - observatory.device.relay.telemetry.switch_state
+  - name: sdr
+    type: topic
+    durable: true
+    auto_delete: false
+    bindings:
+      - service: SDRController
+        routing_keys:
+          - observatory.device.sdr.command.*
+    publishings:
+      - service: SDRClient
+        rpc: True
+        routing_keys:
+          - observatory.device.sdr.command.start_record
+          - observatory.device.sdr.command.stop_record
+  - name: astrodynamics
+    type: topic
+    durable: true
+    auto_delete: false
+    bindings:
+      - service: AstrodynamicsController
+        routing_keys:
+          - observatory.astrodynamics.command.*
+    publishings:
+      - service: AstrodynamicsClient
+        rpc: True
+        routing_keys:
+          - observatory.astrodynamics.command.get_kinematic_state
+          - observatory.astrodynamics.command.get_kinematic_aos_los
+          - observatory.astrodynamics.command.get_interpolated_orbit
+          - observatory.astrodynamics.command.precompute_orbit
+      - service: AstrodynamicsController
+        rpc: False
+        routing_keys:
+          - observatory.astrodynamics.telemetry.kinematic_state
+          - observatory.astrodynamics.telemetry.kinematic_aos_los
+          - observatory.astrodynamics.telemetry.interpolated_orbit
+  - name: database
+    type: topic
+    durable: true
+    auto_delete: false
+    bindings:
+      - service: DBQueryService
+        routing_keys:
+          - observatory.database.command.*
+    publishings:
+      - service: DBQueryClient
+        rpc: True
+        routing_keys:
+          - observatory.database.command.query
+          - observatory.database.command.get_satellite_ids
+          - observatory.database.command.get_active_downlink_satellite_ids
+      - service: DBQueryService
+        rpc: False
+        routing_keys:
+          - observatory.database.telemetry.record
+          - observatory.database.telemetry.satellite_ids
+          - observatory.database.telemetry.active_downlink_satellite_ids
+  - name: radiometrics
+    type: topic
+    durable: true
+    auto_delete: false
+    bindings:
+      - service: RadiometricsController
+        routing_keys:
+          - observatory.radiometrics.command.*
+    publishings:
+      - service: RadiometricsCLient
+        rpc: True
+        routing_keys:
+          - observatory.radiometrics.command.get_tx_profile
+          - observatory.radiometrics.command.get_downlink_freq
+      - service: RadiometricsController
+        rpc: False
+        routing_keys:
+          - observatory.radiometrics.telemetry.tx_profile
+          - observatory.radiometrics.telemetry.downlink_freq
+  - name: observatory_operation
+    type: topic
+    durable: true
+    auto_delete: false
+    bindings:
+      - service: ObservatoryOperationController
+        routing_keys:
+          - observatory.operation.command.*
+    publishings:
+      - service: ObservatoryOperationClient
+        rpc: True
+        routing_keys:
+          - observatory.operation.command.set_state
+          - observatory.operation.command.get_state
+      - service: ObservatoryOperationClient
+        rpc: False
+        routing_keys:
+          - observatory.operation.telemetry.state
+  - name: events
+    type: topic
+    durable: true
+    auto_delete: false
+    bindings:
+      - service: AlertMonitor
+        routing_keys:
+          - observatory.#.alert.#
+    publishings:
+      - service: MountController
+        rpc: False
+        routing_keys:
+          - observatory.device.mount.event.status.device_state
+      - service: RelayController
+        rpc: False
+        routing_keys:
+          - observatory.device.relay.event.status.device_state
+      - service: SDRController
+        rpc: False
+        routing_keys:
+          - observatory.device.sdr.event.status.device_state
+      - service: ObservatoryOperationController
+        rpc: False
+        routing_keys:
+          - observatory.operation.event.system.state
+
+      
+
+      

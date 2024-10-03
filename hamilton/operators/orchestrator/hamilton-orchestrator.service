@@ -1,0 +1,20 @@
+[Unit]
+Description=Orchestrator Service
+Requires=rabbitmq-server.service hamilton-sdr-controller.service hamilton-tracker.service
+After=rabbitmq-server.service hamilton-log-collector.service hamilton-sdr-controller.service hamilton-tracker.service
+# Defines the time period in which restart attempts are counted (seconds)
+StartLimitIntervalSec=60
+[Service]
+User=mgp
+ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamilton/operators/orchestrator/controller.py
+Restart=on-failure
+WorkingDirectory=/home/mgp/dev/hamilton/hamilton/operators/orchestrator/
+# Specifies the number of restart attempts within the interval defined above
+StartLimitBurst=2
+# Optional: Time to wait before restarting the service
+RestartSec=5
+
+
+
+[Install]
+WantedBy=multi-user.target

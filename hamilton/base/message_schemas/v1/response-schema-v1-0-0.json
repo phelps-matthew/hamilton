@@ -1,0 +1,42 @@
+{
+    "type": "object",
+    "properties": {
+      "messageType": {
+        "type": "string",
+        "enum": ["response"],
+        "description": "Indicates that this is a response message."
+      },
+      "timestamp": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Timestamp of when the response was issued."
+      },
+      "source": {
+        "type": "string",
+        "description": "Identifier for the source of the response."
+      },
+      "version": {
+        "type": "string",
+        "description": "Version of the response message format."
+      },
+      "payload": {
+        "type": "object",
+        "properties": {
+          "responseType": {
+            "type": "string",
+            "description": "Type of response being provided."
+          },
+          "data": {
+            "type": "object",
+            "description": "Data relevant to the response. Can be arbitrary dictionary.",
+            "additionalProperties": true
+          }
+        },
+        "required": ["responseType", "data"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["messageType", "timestamp", "source", "version", "payload"],
+    "additionalProperties": false
+  }
+  
