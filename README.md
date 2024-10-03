@@ -68,7 +68,7 @@ service_name/
 
 ## Messaging System
 
-Hamilton uses a messaging system built on top of RabbitMQ, providing a robust foundation for inter-service communication. The `messaging` module offers high-level abstractions for asynchronous message handling:
+Hamilton uses a messaging system built on top of RabbitMQ, serving as the foundation for inter-service communication. The `messaging` module offers high-level abstractions for asynchronous message handling:
 
 - `AsyncMessageNode`: A base class representing entities that consume and publish data, serving as the foundation for both clients and controllers.
 - `AsyncConsumer` and `AsyncProducer`: Specialized classes for message consumption and production.
