@@ -17,6 +17,9 @@ setuptools.setup(
         "aio-pika",
         "aiohttp",
         "bson",
+        "pyserial",
+        "motor",
+        "pylibftdi"
     ]
 )
 

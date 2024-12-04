@@ -182,7 +182,7 @@ class SpaceObjectTracker:
                                 self.aos_los[sat_id] = full_event_map
                                 return full_event_map
 
-                logger.error(f"No valid combination of aos < tca < los found for {sat_id}")
+                logger.warning(f"No valid combination of aos < tca < los found for {sat_id}")
             except Exception as e:
                 logger.error(f"Failed to get aos_los for {sat_id}: {e}")
 
