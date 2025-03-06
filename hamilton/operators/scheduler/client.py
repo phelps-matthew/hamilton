@@ -47,7 +47,7 @@ class SchedulerClient(AsyncMessageNodeOperator):
 
     async def set_mode(self, mode: str):
         """
-        Args: mode: [survey, standby, inactive]
+        Args: mode: [survey, standby, inactive, collect_request]
         """
         command = "set_mode"
         parameters = {"mode": mode}
