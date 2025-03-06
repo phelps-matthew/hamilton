@@ -2,6 +2,8 @@ import asyncio
 import logging
 import signal
 import subprocess
+import yaml
+from hamilton.core.constants import ACTIVE_SERVICES_FILE
 
 from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.messaging.interfaces import MessageHandler
@@ -63,9 +65,20 @@ class ServiceViewerController(AsyncMessageNodeOperator):
         if config is None:
             config = ServiceViewerControllerConfig()
         self.config = config
-        self.services = config.SERVICES
+        self.services = self._load_services_from_yaml()
         self.handler = ServiceViewerCommandHandler(services=self.services)
         super().__init__(config, [self.handler], shutdown_event)
+
+    def _load_services_from_yaml(self) -> list:
+        """Load the list of active services from the YAML file."""
+        try:
+            with open(ACTIVE_SERVICES_FILE, 'r') as file:
+                data = yaml.safe_load(file)
+                return data.get('active_services', [])
+        except Exception as e:
+            logger.error(f"Error loading services from {ACTIVE_SERVICES_FILE}: {e}")
+            # Fall back to config services if available, otherwise empty list
+            return getattr(self.config, 'SERVICES', [])
 
     async def publish_service_status_telemetry(self):
         routing_key = f"{self.handler.routing_key_base}.status"

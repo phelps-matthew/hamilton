@@ -6,7 +6,9 @@ to service files or for initial setup.
 
 import argparse
 import subprocess
+import yaml
 from pathlib import Path
+from hamilton.core.constants import ACTIVE_SERVICES_FILE, PROJECT_DIR
 
 # Top level directory containing .service file defintions
 SERVICE_DIR = Path(__file__).parent.parent / "operators"
@@ -54,10 +56,53 @@ def setup_service(service_path, dry_run=False):
                 subprocess.run(["sudo", "systemctl", "start", service_name])
 
 
+def load_active_services():
+    """Load the list of active services from the YAML file."""
+    try:
+        with open(ACTIVE_SERVICES_FILE, 'r') as file:
+            data = yaml.safe_load(file)
+            return data.get('active_services', [])
+    except Exception as e:
+        print(f"Error loading services from {ACTIVE_SERVICES_FILE}: {e}")
+        return []
+
+
+def find_service_file(service_name):
+    """Find the service file for a given service name."""
+    # Remove 'hamilton-' prefix if present to match directory structure
+    if service_name.startswith('hamilton-'):
+        service_dir_name = service_name[len('hamilton-'):]
+    else:
+        service_dir_name = service_name
+    
+    # Look for the service file in the operators directory
+    possible_locations = [
+        SERVICE_DIR / service_dir_name / f"{service_name}.service",
+        SERVICE_DIR / service_dir_name / f"{service_dir_name}.service",
+        PROJECT_DIR / "operators" / service_dir_name / f"{service_name}.service"
+    ]
+    
+    for location in possible_locations:
+        if location.exists():
+            return location
+    
+    print(f"Warning: Could not find service file for {service_name}")
+    return None
+
+
 def main(dry_run=False):
-    service_files = SERVICE_DIR.rglob("*.service")
-    for service_path in service_files:
-        setup_service(service_path, dry_run=dry_run)
+    active_services = load_active_services()
+    if not active_services:
+        print("No active services found in configuration. Exiting.")
+        return
+    
+    print(f"Found {len(active_services)} active services to set up.")
+    
+    for service_name in active_services:
+        service_path = find_service_file(service_name)
+        if service_path:
+            setup_service(service_path, dry_run=dry_run)
+    
     print(
         "All services have been set up or updated. [DRY RUN]"
         if dry_run

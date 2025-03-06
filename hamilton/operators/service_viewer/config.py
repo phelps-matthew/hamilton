@@ -17,22 +17,6 @@ class ServiceViewerControllerConfig(MessageNodeConfig):
             ],
         ),
     ]
-    SERVICES = [
-        "hamilton-astrodynamics",
-        "hamilton-database-update",
-        "hamilton-database-query",
-        "hamilton-log-collector",
-        "hamilton-mount-controller",
-        "hamilton-radiometrics",
-        "hamilton-relay-controller",
-        "hamilton-sdr-controller",
-        "hamilton-service-viewer",
-        "hamilton-tracker",
-        "hamilton-orchestrator",
-        "hamilton-signal-processor",
-        "hamilton-scheduler",
-        "hamilton-sensor-capsule",
-    ]
 
     UPDATE_INTERVAL = 60 * 5 # seconds
 
