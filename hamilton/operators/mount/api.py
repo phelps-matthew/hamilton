@@ -1,7 +1,7 @@
 """
 This is a python interface to the Alfa ROT2Prog Controller.
 """
-import logging
+from loguru import logger
 import time
 from threading import Lock, Thread
 

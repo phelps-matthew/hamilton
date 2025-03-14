@@ -3,7 +3,7 @@ Parse JE9PEL's satellite frequency list for merging with our "SATCOM" database
 """
 
 import json
-import logging
+from loguru import logger
 import re
 from pathlib import Path
 
@@ -17,7 +17,7 @@ from hamilton.operators.database.config import DBUpdaterConfig
 # pd.set_option("display.max_rows", 500)
 # pd.set_option("display.max_colwidth", None)
 
-logger = logging.getLogger(__name__)
+
 
 
 class JE9PELGenerator:

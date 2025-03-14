@@ -6,9 +6,9 @@ from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOpera
 from hamilton.messaging.interfaces import MessageHandler
 from hamilton.operators.orchestrator.api import Orchestrator
 from hamilton.operators.orchestrator.config import OrchestatorControllerConfig
-import logging
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+
 
 
 class OrchestratorCommandHandler(MessageHandler):

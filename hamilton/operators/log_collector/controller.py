@@ -1,6 +1,6 @@
 import asyncio
 import json
-import logging
+from loguru import logger
 import signal
 from logging.handlers import RotatingFileHandler
 from pathlib import Path

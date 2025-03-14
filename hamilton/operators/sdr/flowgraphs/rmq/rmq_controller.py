@@ -1,5 +1,5 @@
 import json
-import logging
+from loguru import logger
 from typing import Optional
 
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
@@ -8,7 +8,7 @@ from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.common.utils import CustomJSONEncoder
 from hamilton.operators.sdr.flowgraphs.rmq.config import RMQControllerConfig
 
-logger = logging.getLogger(__name__)
+
 
 
 class RMQMessageHandler(MessageHandler):

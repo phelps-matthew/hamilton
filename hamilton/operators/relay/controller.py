@@ -1,7 +1,7 @@
 import asyncio
 import signal
 from typing import Optional
-import logging
+from loguru import logger
 
 from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.operators.relay.config import RelayControllerConfig
@@ -9,7 +9,7 @@ from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOpera
 from hamilton.messaging.interfaces import MessageHandler
 from hamilton.operators.relay.api import FTDIBitbangRelay
 
-logger = logging.getLogger(__name__)
+
 
 
 class RelayCommandHandler(MessageHandler):

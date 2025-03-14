@@ -7,9 +7,9 @@ from hamilton.operators.signal_processor.api import SignalProcessor
 from hamilton.operators.signal_processor.config import SignalProcessorControllerConfig
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.messaging.interfaces import MessageHandler
-import logging
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+
 
 
 class SignalProcessorCommandHandler(MessageHandler):

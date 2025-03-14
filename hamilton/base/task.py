@@ -3,10 +3,10 @@ from datetime import datetime, UTC, timezone, timedelta
 from enum import Enum
 from hamilton.operators.astrodynamics.client import AstrodynamicsClient
 from hamilton.operators.radiometrics.client import RadiometricsClient
-import logging
+from loguru import logger
 import uuid
 
-logger = logging.getLogger(__name__)
+
 
 
 class TaskType(Enum):

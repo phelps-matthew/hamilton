@@ -3,7 +3,7 @@
 import argparse
 import asyncio
 import json
-import logging
+from loguru import logger
 
 from hamilton.common.utils import CustomJSONEncoder
 from hamilton.operators.orchestrator.client import OrchestratorClient

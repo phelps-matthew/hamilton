@@ -8,7 +8,7 @@ Schema validation would improve.
 """
 
 import json
-import logging
+from loguru import logger
 from pathlib import Path
 import requests
 import pandas as pd
@@ -16,7 +16,7 @@ from hamilton.operators.database.config import DBUpdaterConfig
 from hamilton.operators.database.generators.je9pel_generator import JE9PELGenerator
 
 
-logger = logging.getLogger(__name__)
+
 
 
 class SatcomDBGenerator:

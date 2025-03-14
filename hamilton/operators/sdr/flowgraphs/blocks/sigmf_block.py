@@ -1,4 +1,4 @@
-import logging
+from loguru import logger
 import os
 import threading
 from datetime import datetime, timedelta
@@ -10,7 +10,7 @@ from gnuradio import gr
 import sigmf
 from sigmf import SigMFFile
 
-logger = logging.getLogger(__name__)
+
 
 
 class SigMFUSRPSink(gr.sync_block):

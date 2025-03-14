@@ -9,14 +9,14 @@
 
 from datetime import datetime, timezone, timedelta
 import asyncio
-import logging
+from loguru import logger
 from hamilton.operators.sdr.client import SDRClient
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.operators.tracker.client import TrackerClient
 from hamilton.operators.signal_processor.client import SignalProcessorClient
 from hamilton.base.task import Task
 
-logger = logging.getLogger(__name__)
+
 
 
 class Orchestrator:

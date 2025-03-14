@@ -9,7 +9,7 @@ file I/O or network I/O.
 """
 
 import asyncio
-import logging
+from loguru import logger
 from typing import Any, Callable, Optional
 
 from hamilton.base.config import MessageNodeConfig
@@ -20,7 +20,7 @@ from hamilton.messaging.interfaces import IMessageNodeOperations, MessageHandler
 from hamilton.messaging.rpc_manager import RPCManager
 
 
-logger = logging.getLogger(__name__)
+
 
 
 class AsyncMessageNode(IMessageNodeOperations):

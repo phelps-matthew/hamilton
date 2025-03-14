@@ -2,7 +2,7 @@
 
 import argparse
 import asyncio
-import logging
+from loguru import logger
 import json
 
 from hamilton.operators.scheduler.client import SchedulerClient

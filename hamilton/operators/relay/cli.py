@@ -3,7 +3,7 @@
 import argparse
 from hamilton.operators.relay.client import RelayClient
 import asyncio
-import logging
+from loguru import logger
 
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.WARNING)

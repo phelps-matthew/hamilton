@@ -21,13 +21,13 @@ from gnuradio import eng_notation
 from gnuradio import uhd
 import time
 import threading
-import logging
+from loguru import logger
 
 from hamilton.operators.sdr.flowgraphs.blocks.sigmf_block import SigMFUSRPSink
 from hamilton.operators.sdr.flowgraphs.blocks.rmq_block import RMQSource
 from hamilton.operators.sdr.flowgraphs.rmq.rmq_controller import RMQController
 
-logger = logging.getLogger(__name__)
+
 
 
 class SigMFRecordFlowgraph(gr.top_block):

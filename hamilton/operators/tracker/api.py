@@ -1,11 +1,11 @@
-import logging
+from loguru import logger
 import asyncio
 from hamilton.operators.mount.client import MountClient
 from hamilton.operators.astrodynamics.client import AstrodynamicsClient
 from hamilton.operators.tracker.config import TrackerControllerConfig
 from hamilton.base.task import Task
 
-logger = logging.getLogger(__name__)
+
 
 
 class Tracker:

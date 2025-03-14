@@ -1,7 +1,7 @@
 import asyncio
 import aio_pika
 import json
-import logging
+from loguru import logger
 import uuid
 from aio_pika import IncomingMessage
 from hamilton.base.config import MessageNodeConfig
@@ -10,7 +10,7 @@ from hamilton.messaging.interfaces import MessageHandler, MessageHandlerType
 from hamilton.common.utils import CustomJSONDecoder
 
 
-logger = logging.getLogger(__name__)
+
 
 
 class AsyncConsumer:

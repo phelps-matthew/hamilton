@@ -7,9 +7,9 @@ from hamilton.operators.tracker.api import Tracker
 from hamilton.operators.tracker.config import TrackerControllerConfig
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 from hamilton.messaging.interfaces import MessageHandler
-import logging
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+
 
 
 class TrackerCommandHandler(MessageHandler):

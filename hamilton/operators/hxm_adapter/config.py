@@ -26,7 +26,7 @@ class HXMAdapterControllerConfig(MessageNodeConfig):
 
     hamilton_x_machina_ip: str = "localhost"
     hamilton_x_machina_port: int = 8003
-    hamilton_x_machina_poll_interval: int = 60  # seconds
+    hamilton_x_machina_poll_interval: int = 2  # seconds
 
 
 class HXMAdapterClientConfig(MessageNodeConfig):

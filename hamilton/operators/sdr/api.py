@@ -11,10 +11,10 @@ from hamilton.operators.relay.client import RelayClient
 from hamilton.operators.radiometrics.client import RadiometricsClient
 from hamilton.common.utils import CustomJSONEncoder
 from pathlib import Path
-import logging
+from loguru import logger
 import json
 
-logger = logging.getLogger(__name__)
+
 
 
 class SDRSigMFRecord:

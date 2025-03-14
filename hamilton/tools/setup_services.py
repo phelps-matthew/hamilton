@@ -9,6 +9,7 @@ import subprocess
 import yaml
 from pathlib import Path
 from hamilton.core.constants import ACTIVE_SERVICES_FILE, PROJECT_DIR
+from loguru import logger
 
 # Top level directory containing .service file defintions
 SERVICE_DIR = Path(__file__).parent.parent / "operators"
@@ -29,11 +30,11 @@ def is_service_active(service_name):
 def setup_service(service_path, dry_run=False):
     """Set up a single service."""
     service_name = service_path.name
-    print(f"[DRY RUN] Setting up {service_name}..." if dry_run else f"Setting up {service_name}...")
+    logger.info(f"[DRY RUN] Setting up {service_name}..." if dry_run else f"Setting up {service_name}...")
 
     symlink_path = SYSTEMD_DIR / service_name
     if symlink_path.exists() or symlink_path.is_symlink():
-        print(
+        logger.info(
             f"[DRY RUN] Symlink for {service_name} would be updated."
             if dry_run
             else f"Symlink for {service_name} already exists. Updating."
@@ -47,11 +48,11 @@ def setup_service(service_path, dry_run=False):
         subprocess.run(["sudo", "systemctl", "enable", service_name])
 
         if is_service_active(service_name):
-            print(f"[DRY RUN] Would restart {service_name}" if dry_run else f"Restarting {service_name}")
+            logger.info(f"[DRY RUN] Would restart {service_name}" if dry_run else f"Restarting {service_name}")
             if not dry_run:
                 subprocess.run(["sudo", "systemctl", "restart", service_name])
         else:
-            print(f"[DRY RUN] Would start {service_name}" if dry_run else f"Starting {service_name}")
+            logger.info(f"[DRY RUN] Would start {service_name}" if dry_run else f"Starting {service_name}")
             if not dry_run:
                 subprocess.run(["sudo", "systemctl", "start", service_name])
 
@@ -60,50 +61,52 @@ def load_active_services():
     """Load the list of active services from the YAML file."""
     try:
         with open(ACTIVE_SERVICES_FILE, 'r') as file:
+            logger.info(f"Loading active services from {ACTIVE_SERVICES_FILE}")
             data = yaml.safe_load(file)
             return data.get('active_services', [])
     except Exception as e:
-        print(f"Error loading services from {ACTIVE_SERVICES_FILE}: {e}")
+        logger.error(f"Error loading services from {ACTIVE_SERVICES_FILE}: {e}")
         return []
 
 
-def find_service_file(service_name):
-    """Find the service file for a given service name."""
-    # Remove 'hamilton-' prefix if present to match directory structure
-    if service_name.startswith('hamilton-'):
-        service_dir_name = service_name[len('hamilton-'):]
-    else:
-        service_dir_name = service_name
+def find_service_files():
+    """Find all service files in the SERVICE_DIR and return a dictionary mapping service names to file paths."""
+    service_files = {}
     
-    # Look for the service file in the operators directory
-    possible_locations = [
-        SERVICE_DIR / service_dir_name / f"{service_name}.service",
-        SERVICE_DIR / service_dir_name / f"{service_dir_name}.service",
-        PROJECT_DIR / "operators" / service_dir_name / f"{service_name}.service"
-    ]
-    
-    for location in possible_locations:
-        if location.exists():
-            return location
-    
-    print(f"Warning: Could not find service file for {service_name}")
-    return None
+    # Recursively find all .service files
+    for service_file in SERVICE_DIR.glob("**/*.service"):
+        # Extract service name (filename without .service extension)
+        service_name = service_file.stem
+        service_files[service_name] = service_file
+        
+    logger.info(f"Found {len(service_files)} service files in {SERVICE_DIR}")
+    return service_files
 
 
 def main(dry_run=False):
     active_services = load_active_services()
     if not active_services:
-        print("No active services found in configuration. Exiting.")
+        logger.error("No active services found in configuration. Exiting.")
         return
     
-    print(f"Found {len(active_services)} active services to set up.")
+    logger.info(f"Found {len(active_services)} active services to set up.")
     
+    # Find all available service files
+    available_services = find_service_files()
+    logger.info(f"Available service files: {', '.join(available_services.keys())}")
+    
+    # Set up each active service if its file exists
     for service_name in active_services:
-        service_path = find_service_file(service_name)
-        if service_path:
-            setup_service(service_path, dry_run=dry_run)
+        # Try exact match first
+        if service_name in available_services:
+            setup_service(available_services[service_name], dry_run=dry_run)
+        # If not found, try without 'hamilton-' prefix
+        elif service_name.startswith('hamilton-') and service_name[len('hamilton-'):] in available_services:
+            setup_service(available_services[service_name[len('hamilton-'):]], dry_run=dry_run)
+        else:
+            logger.warning(f"Warning: Could not find service file for {service_name}")
     
-    print(
+    logger.info(
         "All services have been set up or updated. [DRY RUN]"
         if dry_run
         else "All services have been set up or updated."

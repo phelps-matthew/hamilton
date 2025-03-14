@@ -1,7 +1,7 @@
 import asyncio
 import aio_pika
 import json
-import logging
+from loguru import logger
 import uuid
 import asyncio
 from typing import Optional, Any
@@ -11,7 +11,7 @@ from hamilton.common.utils import CustomJSONEncoder
 from hamilton.base.messages import Message
 from hamilton.messaging.rpc_manager import RPCManager
 
-logger = logging.getLogger(__name__)
+
 
 
 class AsyncProducer:

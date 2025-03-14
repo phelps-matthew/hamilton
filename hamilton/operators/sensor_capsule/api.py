@@ -8,7 +8,7 @@
 import asyncio
 from datetime import datetime, timezone, timedelta
 import json
-import logging
+from loguru import logger
 import aiohttp
 from hamilton.operators.scheduler.client import SchedulerClient
 from hamilton.operators.astrodynamics.client import AstrodynamicsClient
@@ -16,7 +16,7 @@ from hamilton.operators.sensor_capsule.config import SensorCapsuleControllerConf
 from hamilton.base.task import Task, TaskGenerator
 from hamilton.common.utils import wait_until_first_completed, CustomJSONEncoder
 
-logger = logging.getLogger(__name__)
+
 
 
 class SensorCapsule:

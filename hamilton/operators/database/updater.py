@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from loguru import logger
 import signal
 from pathlib import Path
 from hamilton.operators.database.config import DBUpdaterConfig
@@ -10,7 +10,7 @@ from hamilton.operators.database.generators.je9pel_generator import JE9PELGenera
 from hamilton.operators.database.generators.satcom_db_generator import SatcomDBGenerator
 from hamilton.operators.astrodynamics.client import AstrodynamicsClient
 
-logger = logging.getLogger(__name__)
+
 
 
 class DBUpdater(AsyncMessageNodeOperator):

@@ -1,11 +1,11 @@
 import pylibftdi
 import argparse
-import logging
+from loguru import logger
 import time
 import random
 
 
-logger = logging.getLogger(__name__)
+
 
 
 class FTDIBitbangRelay:

@@ -1,12 +1,12 @@
 import asyncio
-import logging
+from loguru import logger
 from datetime import datetime, timezone, timedelta
 from hamilton.base.task import Task, TaskGenerator
 from hamilton.operators.orchestrator.client import OrchestratorClient
 from hamilton.operators.astrodynamics.client import AstrodynamicsClient
 from hamilton.common.utils import utc_to_local, wait_until_first_completed
 
-logger = logging.getLogger(__name__)
+
 
 
 class Scheduler:

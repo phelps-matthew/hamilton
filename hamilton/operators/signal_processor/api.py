@@ -1,6 +1,6 @@
 import asyncio
 import json
-import logging
+from loguru import logger
 from pathlib import Path
 from datetime import datetime as dt, timedelta
 
@@ -10,7 +10,7 @@ import sigmf
 
 from hamilton.operators.signal_processor.config import SignalProcessorControllerConfig
 
-logger = logging.getLogger(__name__)
+
 
 
 class SignalProcessor:

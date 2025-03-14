@@ -3,7 +3,7 @@
 import argparse
 import asyncio
 from hamilton.operators.sdr.client import SDRClient
-import logging
+from loguru import logger
 
 
 root_logger = logging.getLogger()

@@ -22,9 +22,9 @@ from gnuradio import uhd
 import time
 import gr_sigmf
 import threading
-import logging
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+
 
 class SigMFRecordFlowgraph(gr.top_block):
 

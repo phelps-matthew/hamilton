@@ -1,7 +1,7 @@
 """Compute astrodynamic parameters associated with space objects. Based on TLE's for now."""
 
 import asyncio
-import logging
+from loguru import logger
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -13,7 +13,7 @@ from skyfield.api import EarthSatellite, load, wgs84
 from hamilton.operators.astrodynamics.config import AstrodynamicsControllerConfig
 from hamilton.operators.database.client import DBClient
 
-logger = logging.getLogger(__name__)
+
 
 
 @asynccontextmanager

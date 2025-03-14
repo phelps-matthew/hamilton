@@ -4,9 +4,9 @@ from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOpera
 from hamilton.base.messages import Message
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-import logging
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+
 
 class RMQSource(gr.sync_block):
     def __init__(self):

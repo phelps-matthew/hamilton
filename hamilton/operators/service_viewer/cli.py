@@ -3,7 +3,7 @@
 import argparse
 import asyncio
 from hamilton.operators.service_viewer.client import ServiceViewerClient
-import logging
+from loguru import logger
 import json
 
 

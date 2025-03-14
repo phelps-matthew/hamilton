@@ -1,12 +1,12 @@
 import asyncio
-import logging
+from loguru import logger
 import threading
 
 from gnuradio import gr
 import pmt
 from hamilton.messaging.async_message_node_operator import AsyncMessageNodeOperator
 
-logger = logging.getLogger(__name__)
+
 
 
 class RMQSource(gr.sync_block):

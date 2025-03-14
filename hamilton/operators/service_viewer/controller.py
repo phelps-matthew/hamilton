@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from loguru import logger
 import signal
 import subprocess
 import yaml
@@ -12,7 +12,7 @@ from hamilton.operators.service_viewer.config import ServiceViewerControllerConf
 from typing import Optional
 
 
-logger = logging.getLogger(__name__)
+
 
 
 class ServiceViewerCommandHandler(MessageHandler):

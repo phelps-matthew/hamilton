@@ -8,7 +8,8 @@
 import asyncio
 from datetime import datetime, timezone, timedelta
 import json
-import logging
+from loguru import logger
+from loguru import logger
 import aiohttp
 from hamilton.operators.scheduler.client import SchedulerClient
 from hamilton.operators.astrodynamics.client import AstrodynamicsClient
@@ -16,7 +17,6 @@ from hamilton.operators.hxm_adapter.config import HXMAdapterControllerConfig
 from hamilton.base.task import Task, TaskGenerator
 from hamilton.common.utils import wait_until_first_completed, CustomJSONEncoder
 
-logger = logging.getLogger(__name__)
 
 
 class HXMAdapter:
@@ -71,6 +71,9 @@ class HXMAdapter:
             try:
                 if method == "GET":
                     async with session.get(url, ssl=False, timeout=timeout) as response:
+                        if response.status == 404:
+                            logger.info(f"No data found at {url}: {response.status}")
+                            return None
                         response.raise_for_status()  # Raises an HTTPError for bad responses
                         return await response.json()  # Assuming the response is JSON
                 elif method == "POST":
@@ -79,6 +82,9 @@ class HXMAdapter:
                         return await response.json()
             except aiohttp.ClientResponseError as e:
                 logger.error(f"HTTP error occurred: {e} - Status code: {e.status}")
+                if e.status == 404:
+                    # This is an expected case for empty queues
+                    return None
             except aiohttp.ClientError as e:
                 logger.error(f"Error connecting to {url}: {e}")
             except json.JSONDecodeError as e:
@@ -95,7 +101,8 @@ class HXMAdapter:
             logger.info(f"Successfully popped collect request from HXM: {json.dumps(response_data, indent=4, cls=CustomJSONEncoder)}")
             return response_data
         else:
-            logger.error("Failed to pop collect request from HXM.")
+            # This is normal when queue is empty, so use info level
+            logger.info("No collect requests available to pop from HXM")
             return None
 
     async def peek_collect_request(self):
@@ -106,7 +113,8 @@ class HXMAdapter:
             logger.info(f"Successfully peeked collect request from HXM: {json.dumps(response_data, indent=4, cls=CustomJSONEncoder)}")
             return response_data
         else:
-            logger.error("Failed to peek collect request from HXM.")
+            # This is normal when queue is empty, so use info level
+            logger.info("No collect requests available to peek from HXM")
             return None
 
     async def get_all_collect_requests(self):
@@ -114,11 +122,11 @@ class HXMAdapter:
         url = f"{self.hxm_url}/api/v1/collect-requests"
         response_data = await self.http_request("GET", url)
         if response_data:
-            logger.info(f"Successfully retrieved all collect requests from HXM: {json.dumps(response_data, indent=4, cls=CustomJSONEncoder)}")
+            logger.info(f"Successfully retrieved {len(response_data)} collect requests from HXM")
             return response_data
         else:
-            logger.error("Failed to retrieve all collect requests from HXM.")
-            return None
+            logger.info("No collect requests available from HXM")
+            return []
 
     async def submit_collect_response(self, collect_response):
         """Submit a collect response to the HXM service."""
@@ -128,31 +136,37 @@ class HXMAdapter:
             logger.info(f"Successfully submitted collect response to HXM: {response_data}")
             return response_data
         else:
-            logger.error("Failed to submit collect response to HXM.")
+            logger.error(f"Failed to submit collect response to HXM")
             return None
 
     async def poll_hxm_collect_request(self):
         """Periodically poll the HXM service for collect requests, transform them, and send to scheduler."""
         while not self.shutdown_event.is_set():
-            collect_request = await self.pop_collect_request()
-            if collect_request:
-                # Transform to Task
-                task = await self.collect_request_to_task(collect_request)
-                if task:
-                    # Send to scheduler
-                    logger.info("Sending task to scheduler")
-                    await self.scheduler.enqueue_collect_request(task)
-                    self.last_dispatched_task = task
-                    # Wait a short time before checking for more requests
-                    await wait_until_first_completed([self.shutdown_event], [asyncio.sleep(1)])
-                    continue
-            
-            # If no request or processing failed, wait before polling again
-            logger.info(f"Sleeping for {self.config.hamilton_x_machina_poll_interval} seconds")
-            await wait_until_first_completed([self.shutdown_event], [asyncio.sleep(self.config.hamilton_x_machina_poll_interval)])
+            try:
+                collect_request = await self.pop_collect_request()
+                if collect_request:
+                    # Transform to Task
+                    task = await self.collect_request_to_task(collect_request)
+                    if task:
+                        # Send to scheduler
+                        logger.info("Sending task to scheduler")
+                        await self.scheduler.enqueue_collect_request(task)
+                        self.last_dispatched_task = task
+                        # Wait a short time before checking for more requests
+                        await wait_until_first_completed([self.shutdown_event], [asyncio.sleep(1)])
+                        continue
+                
+                # If no request or processing failed, wait before polling again
+                logger.info(f"Sleeping for {self.config.hamilton_x_machina_poll_interval} seconds")
+                await wait_until_first_completed([self.shutdown_event], [asyncio.sleep(self.config.hamilton_x_machina_poll_interval)])
+            except Exception as e:
+                logger.error(f"Error in poll_hxm_collect_request: {e}")
+                # Continue polling even after errors
+                await wait_until_first_completed([self.shutdown_event], [asyncio.sleep(self.config.hamilton_x_machina_poll_interval)])
 
     async def collect_request_to_task(self, collect_request: dict) -> Task:
         """Transform a collect request to a Task."""
+        logger.info(f"Collect request:\n{json.dumps(collect_request, indent=4, cls=CustomJSONEncoder)}")
         try:
             sat_id = collect_request.get("satNo")
             if not sat_id:
