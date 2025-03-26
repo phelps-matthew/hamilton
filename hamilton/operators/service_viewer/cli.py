@@ -7,9 +7,6 @@ from loguru import logger
 import json
 
 
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.WARNING)
-
 
 async def handle_command(service):
     client = ServiceViewerClient()

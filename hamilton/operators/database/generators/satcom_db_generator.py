@@ -14,7 +14,7 @@ import requests
 import pandas as pd
 from hamilton.operators.database.config import DBUpdaterConfig
 from hamilton.operators.database.generators.je9pel_generator import JE9PELGenerator
-
+from hamilton.operators.astrodynamics.orbit_regime import check_tle_orbital_regime
 
 
 
@@ -178,7 +178,7 @@ class SatcomDBGenerator:
         df_exploded["tx_dl_low"] = df_exploded["tx_dl_low"].fillna(df_exploded["tx_dl_high"])
         df_exploded["tx_dl_high"] = df_exploded["tx_dl_high"].fillna(df_exploded["tx_dl_low"])
 
-        # Filter transmitter frequences to specified VHF range
+        # Filter transmitter frequences to specified VHF/UHF range
         df_filtered = df_exploded[
             ((df_exploded["tx_dl_low"] >= self.config.VHF_LOW) & (df_exploded["tx_dl_high"] <= self.config.VHF_HIGH))
             | ((df_exploded["tx_dl_low"] >= self.config.UHF_LOW) & (df_exploded["tx_dl_high"] <= self.config.UHF_HIGH))
@@ -269,6 +269,7 @@ class SatcomDBGenerator:
 
     ## Merge ##
     def merge_with_je9pel(self, data: dict, je9pel_data: dict):
+        logger.debug("Merging with JE9PEL data.")
         # Iterate over each item in the satcom dictionary
         for sat_id, details in data.items():
             # Get the 'norad_cat_id' from the current entry
@@ -289,6 +290,7 @@ class SatcomDBGenerator:
     ## Filter out CW only signals ##
     def filter(self, data: dict) -> dict:
         """Filter out CW only signals"""
+        logger.debug("Filtering out CW only signals.")
         good_sats = []
         for k, v in data.items():
             tx_profile = v
@@ -315,6 +317,13 @@ class SatcomDBGenerator:
 
         return {k: v for k, v in data.items() if k in good_sats}
 
+    def add_orbit_regime(self, data: dict) -> dict:
+        """Add the orbit regime to the database"""
+        logger.debug("Adding orbit regime values from TLE's.")
+        for v in data.values():
+            v["orbit_regime"] = check_tle_orbital_regime(v["tle1"], v["tle2"])["regime"]
+        return data
+
 
     ## Entrypoint ##
 
@@ -340,8 +349,12 @@ class SatcomDBGenerator:
         je9pel_data = self.je9pel.generate_db(use_cache=use_cache)
         data = self.merge_with_je9pel(data, je9pel_data)
 
+        # Add orbit regime
+        data = self.add_orbit_regime(data)
+
         # Filter CW only signals
-        data = self.filter(data)
+        # data = self.filter(data)
+
 
         logger.info(f"Total number of observable satellites: {len(data)}")
         logger.info("SATCOM database generation complete.")

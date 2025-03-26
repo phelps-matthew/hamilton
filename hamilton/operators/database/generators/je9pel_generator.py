@@ -9,14 +9,16 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from time import sleep
 import requests
+from typing import Optional, Tuple
 
 from hamilton.operators.database.config import DBUpdaterConfig
-
+from hamilton.operators.astrodynamics.orbit_regime import check_tle_orbital_regime
+from hamilton.operators.astrodynamics.tle import batch_tle_from_norad_sat_ids
 # Debugging
 # pd.set_option("display.max_rows", 500)
 # pd.set_option("display.max_colwidth", None)
-
 
 
 
@@ -237,6 +239,19 @@ class JE9PELGenerator:
             je9pel_db[key] = inner_dict
         return je9pel_db
 
+    ## Add Orbit Regime ##
+
+    def add_orbit_regime(self, data: dict) -> dict:
+        """Add the orbit regime to the database"""
+        logger.debug("Adding orbit regime values from TLE's.")
+        sat_ids = list(data.keys())
+        tle_dict = batch_tle_from_norad_sat_ids(sat_ids)
+        for k, v in tle_dict.items():
+            data[k]["tle1"] = v[0]
+            data[k]["tle2"] = v[1]
+            data[k]["orbit_regime"] = check_tle_orbital_regime(data[k]["tle1"], data[k]["tle2"])["regime"]
+        return data
+
     ## Entrypoint ##
 
     def generate_db(self, use_cache=False):
@@ -249,6 +264,8 @@ class JE9PELGenerator:
         data = self.transform(data)
 
         data = self.format(data)
+
+        # data = self.add_orbit_regime(data)
 
         path = self.cache_dir / "je9pel.json"
         self.write_json_to_file(data, path)

@@ -7,12 +7,13 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
+import numpy as np
 import pytz
 from skyfield.api import EarthSatellite, load, wgs84
 
 from hamilton.operators.astrodynamics.config import AstrodynamicsControllerConfig
 from hamilton.operators.database.client import DBClient
-
+from hamilton.operators.astrodynamics.orbit_regime import check_tle_orbital_regime
 
 
 
@@ -275,6 +276,17 @@ class SpaceObjectTracker:
         sorted_aos_los_list = sorted(aos_los_list, key=lambda x: x[1])
         return sorted_aos_los_list
 
+    async def get_orbit_regime(self, sat_id: str, time: Optional[datetime] = None):
+        """Get the orbit regime of an RSO.
+            Returns:
+                dict: Orbital regime
+        """
+        if time is None:
+            time = datetime.now(tz=timezone.utc)
+        tle_line_1, tle_line_2 = await self.get_tle(sat_id)
+        return check_tle_orbital_regime(tle_line_1, tle_line_2, time)
+
+
     @staticmethod
     def utc_to_local(time, tz="HST"):
         local_timezone = pytz.timezone(tz)
@@ -283,3 +295,4 @@ class SpaceObjectTracker:
     @staticmethod
     def local_to_utc(time):
         return time.astimezone(timezone.utc)
+
