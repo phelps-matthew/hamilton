@@ -26,7 +26,7 @@ class ROT2Prog:
 
     """Sends commands and receives responses from the ROT2Prog controller."""
 
-    _log = logging.getLogger(__name__)
+    _log = logger
 
     _ser = None
 

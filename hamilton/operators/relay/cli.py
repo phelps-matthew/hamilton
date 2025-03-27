@@ -5,8 +5,9 @@ from hamilton.operators.relay.client import RelayClient
 import asyncio
 from loguru import logger
 
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.WARNING)
+# Set loguru log level to WARNING
+logger.remove()
+logger.add(lambda msg: print(msg), level="WARNING")
 
 
 async def handle_command(args):

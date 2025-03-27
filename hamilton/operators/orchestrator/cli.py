@@ -9,8 +9,9 @@ from hamilton.common.utils import CustomJSONEncoder
 from hamilton.operators.orchestrator.client import OrchestratorClient
 from hamilton.base.task import TaskGenerator
 
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.WARNING)
+# Set loguru log level to WARNING
+logger.remove()
+logger.add(lambda msg: print(msg), level="WARNING")
 
 
 async def handle_command(args):

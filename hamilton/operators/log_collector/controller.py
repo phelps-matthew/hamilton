@@ -1,10 +1,9 @@
 import asyncio
 import json
-from loguru import logger
 import signal
-from logging.handlers import RotatingFileHandler
+from loguru import logger
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 
 from hamilton.base.messages import Message, MessageHandlerType
 from hamilton.common.utils import CustomJSONEncoder
@@ -21,31 +20,29 @@ class LogHandler(MessageHandler):
         self.root_log_dir = Path(config.root_log_dir).expanduser()
         self.max_log_size: int = config.max_log_size
         self.backup_count: int = config.backup_count
-        self.loggers = {}  # Cache loggers based on path
+        self.loggers: Dict[Path, int] = {}  # Cache logger IDs based on path
 
-    async def get_logger(self, log_path: Path) -> logging.Logger:
+    async def get_logger(self, log_path: Path) -> int:
         if log_path not in self.loggers:
             # Ensure directory exists
             log_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Create a logger
-            logger = logging.getLogger(str(log_path))
-            logger.setLevel(logging.INFO)
-
-            # Add rotating file handler
-            handler = RotatingFileHandler(filename=log_path, maxBytes=self.max_log_size, backupCount=self.backup_count)
-            formatter = logging.Formatter("%(message)s")
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-
-            # Avoid propagating messages to the root logger
-            logger.propagate = False
-            self.loggers[log_path] = logger
+            # Add a sink for this log file
+            logger_id = logger.add(
+                str(log_path),
+                rotation=f"{self.max_log_size} bytes",
+                retention=self.backup_count,
+                format="{message}",
+                enqueue=True,
+                backtrace=True,
+                diagnose=True
+            )
+            self.loggers[log_path] = logger_id
 
         return self.loggers[log_path]
 
     async def write_message(self, message: str, log_path: Path) -> None:
-        logger = await self.get_logger(log_path)
+        logger_id = await self.get_logger(log_path)
         logger.info(message)
 
     async def handle_message(self, message: Message, correlation_id: Optional[str] = None) -> None:
@@ -91,7 +88,7 @@ async def main():
         await shutdown_event.wait()  # Wait for the shutdown signal
 
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        logger.exception(f"An unexpected error occurred: {e}")
 
     finally:
         await controller.stop()

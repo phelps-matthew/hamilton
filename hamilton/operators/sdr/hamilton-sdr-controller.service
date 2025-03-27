@@ -10,10 +10,14 @@ ExecStart=/home/mgp/miniforge3/envs/gr39/bin/python /home/mgp/dev/hamilton/hamil
 Restart=on-failure
 WorkingDirectory=/home/mgp/dev/hamilton/hamilton/operators/sdr/
 # Specifies the number of restart attempts within the interval defined above
-StartLimitBurst=2
+StartLimitBurst=20
 # Optional: Time to wait before restarting the service
 RestartSec=5
-
+# Show loguru colors
+StandardOutput=journal+console
+TTYPath=/dev/console
+TTYReset=yes
+TTYVHangup=yes
 
 
 [Install]

@@ -6,6 +6,9 @@ from hamilton.operators.service_viewer.client import ServiceViewerClient
 from loguru import logger
 import json
 
+# Set loguru log level to WARNING
+logger.remove()
+logger.add(lambda msg: print(msg), level="WARNING")
 
 
 async def handle_command(service):
